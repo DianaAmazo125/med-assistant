@@ -1,0 +1,47 @@
+# --- Личные данные: НИКОГДА не коммитим ---
+*.db
+*.db-journal
+*.db-wal
+*.sqlite
+*.sqlite3
+data/
+.selftest/
+profile_config.json
+*.local.json
+.env
+.env.*
+secrets.json
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.python-version
+
+# --- Тесты / инструменты ---
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Редакторы и ОС ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Отчёты, выгруженные из приложения ---
+exports/
+*.pdf

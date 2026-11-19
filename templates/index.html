@@ -1,0 +1,2499 @@
+<!DOCTYPE html>
+<html lang="ru" class="h-full">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<!-- Всё — локальное: никаких CDN. -->
+<link rel="stylesheet" href="/static/app.css">
+<script defer src="/static/app.js"></script>
+<title>Дневник питания и самонаблюдения</title>
+<meta name="description" content="Персональный дневник питания, симптомов и контроля приёма лекарств с модульной системой ограничений.">
+
+<!-- Тема применяется до первой отрисовки, чтобы не было «вспышки» чужой палитры -->
+<script>
+  (function () {
+    var THEMES = ['warm', 'light', 'dark'];
+    var theme = 'warm';
+    try {
+      var saved = window.localStorage.getItem('diary-theme');
+      if (saved && THEMES.indexOf(saved) !== -1) theme = saved;
+    } catch (error) { /* localStorage может быть недоступен */ }
+    document.documentElement.setAttribute('data-theme', theme);
+  })();
+</script>
+
+<style>
+  /* ------------------------------------------------------------------ *
+   * Дизайн-система Calm Health / Bento Grid + утилитарные классы.
+   *
+   * Весь CSS описан локально — приложение не обращается ни к каким CDN
+   * (Tailwind + самописный реактивный рантайм) и полностью работает без интернета.
+   *
+   * Генерировать тысячи утилит не нужно: шаблон использует ~120 классов,
+   * которые перечислены и описаны ниже.
+   *
+   * Вся палитра вынесена в CSS-переменные, поэтому тема переключается
+   * одним атрибутом data-theme на <html>.
+   *
+   * Темы: warm (по умолчанию, мягкая тёплая) / light / dark.
+   * ------------------------------------------------------------------ */
+  :root,
+   :root[data-theme="warm"] {
+    color-scheme: light;
+    --canvas: #E6DFD3;          /* уютный тёплый лён / песочно-бежевый фон */
+    --card: #F7F3EB;            /* тёплая слоновая кость для карточек */
+    --surface-2: #EFE9DD;       /* мягкий кремово-оливковый для подложек */
+    --surface-3: #E3DCCE;       /* тёплый бежевый для полей и кнопок */
+    --track: #DDD5C5;
+    --line: #CFC6B4;
+    --line-soft: rgba(44, 38, 28, .10);
+    --line-strong: #BDB29E;
+    --ink: #26221B;             /* глубокий тёплый эспрессо вместо холодного синего */
+    --ink-soft: #4A4337;
+    --ink-mute: #756B5B;
+    --accent: #276E5D;          /* насыщенный лесной шалфей */
+    --accent-strong: #1F594B;
+    --accent-soft: #D7E6DF;
+    --accent-soft-strong: #C5DBD1;
+    --accent-fill: #276E5D;
+    --accent-fill-hover: #1F594B;
+    --on-accent: #FFFFFF;
+    --safe: #1F6B5A;   --safe-soft: #DCECE4;   --safe-ring: #B4D4C5;   --safe-fill: #1F6B5A;
+    --warn: #8A6212;   --warn-soft: #F3E6C8;   --warn-ring: #DFC896;   --warn-fill: #B8841E;
+    --danger: #9B3636; --danger-soft: #F4DDD9; --danger-ring: #E3B6AF; --danger-fill: #9B3636;
+    --neutral-fill: #756B5B;
+    --seg-ink: #FFFFFF;
+    --heat-1: #C2D8CE; --heat-2: #E8D3A1; --heat-3: #E2B0A8;
+    --tag-gerd: #B9662F; --tag-fodmap: #5F72AE; --tag-purine: #37839C;
+    --tag-migraine: #7C5CA0; --tag-cardio: #AF4F5E;
+    --shadow-card: 0 2px 4px rgba(44,38,28,.06), 0 12px 28px -16px rgba(44,38,28,.22);
+    --shadow-card-hover: 0 4px 10px rgba(44,38,28,.09), 0 20px 38px -18px rgba(44,38,28,.28);
+  }
+
+
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --canvas: #F8FAFC;
+    --card: #FFFFFF;
+    --surface-2: #F8FAFC;
+    --surface-3: #F1F5F9;
+    --track: #F1F5F9;
+    --line: #E5EAF0;
+    --line-soft: rgba(15, 23, 42, .07);
+    --line-strong: #CBD5E1;
+    --ink: #0F172A;
+    --ink-soft: #334155;
+    --ink-mute: #64748B;
+    --accent: #2E7D6B;
+    --accent-strong: #276A5B;
+    --accent-soft: #E3EFEB;
+    --accent-soft-strong: #D3E7E0;
+    --accent-fill: #2E7D6B;
+    --accent-fill-hover: #276A5B;
+    --on-accent: #FFFFFF;
+    --safe: #1F6B5A;   --safe-soft: #E8F5F0;   --safe-ring: #BFE3D8;   --safe-fill: #1F6B5A;
+    --warn: #8A6A16;   --warn-soft: #FDF6E3;   --warn-ring: #F0E0B0;   --warn-fill: #C79A2E;
+    --danger: #9B3B3B; --danger-soft: #FDECEC; --danger-ring: #F5CFCF; --danger-fill: #9B3B3B;
+    --neutral-fill: #64748B;
+    --seg-ink: #FFFFFF;
+    --heat-1: #C7DFD8; --heat-2: #F0D9A8; --heat-3: #E9B4B4;
+    --tag-gerd: #C2703A; --tag-fodmap: #6E7FB8; --tag-purine: #3F8FA8;
+    --tag-migraine: #8B6BAE; --tag-cardio: #B85C6A;
+    --shadow-card: 0 1px 2px rgba(15,23,42,.04), 0 10px 30px -18px rgba(15,23,42,.18);
+    --shadow-card-hover: 0 2px 6px rgba(15,23,42,.06), 0 20px 40px -22px rgba(15,23,42,.26);
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --canvas: #0F172A;
+    --card: #1E293B;
+    --surface-2: #24334A;
+    --surface-3: #2B3B54;
+    --track: #2B3B54;
+    --line: #38485F;
+    --line-soft: rgba(241, 245, 249, .09);
+    --line-strong: #4A5C74;
+    --ink: #F1F5F9;
+    --ink-soft: #CBD5E1;
+    --ink-mute: #9AA8BC;
+    --accent: #34D399;
+    --accent-strong: #4FDFAC;
+    --accent-soft: #12352C;
+    --accent-soft-strong: #17453A;
+    --accent-fill: #34D399;
+    --accent-fill-hover: #4FDFAC;
+    --on-accent: #06231B;
+    --safe: #8CE3C2;   --safe-soft: #14332A;   --safe-ring: #2C5B4B;   --safe-fill: #2F8A72;
+    --warn: #EFD392;   --warn-soft: #38321F;   --warn-ring: #5B4E2C;   --warn-fill: #94742A;
+    --danger: #F0A9A2; --danger-soft: #3A2323; --danger-ring: #5E3838; --danger-fill: #9C4747;
+    --neutral-fill: #55637A;
+    --seg-ink: #F8FAFC;
+    --heat-1: #2F6E5C; --heat-2: #6E5F2C; --heat-3: #7A3F3F;
+    --tag-gerd: #E0A472; --tag-fodmap: #A3B4E8; --tag-purine: #7FC4DC;
+    --tag-migraine: #C0A6E0; --tag-cardio: #E697A5;
+    --shadow-card: 0 1px 2px rgba(0,0,0,.35), 0 12px 30px -18px rgba(0,0,0,.7);
+    --shadow-card-hover: 0 2px 8px rgba(0,0,0,.45), 0 22px 44px -22px rgba(0,0,0,.8);
+  }
+
+  html, body { background: var(--canvas); color: var(--ink); }
+  body { font-family: Inter, system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; -webkit-font-smoothing: antialiased;
+         transition: background-color .18s ease, color .18s ease; }
+  [x-cloak] { display: none !important; }
+
+  /* Карточки — крупные скругления, мягкая тень, тонкая полупрозрачная рамка */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line-soft);
+    border-radius: 1.5rem;
+    box-shadow: var(--shadow-card);
+  }
+  .card-pad { padding: 1.5rem; }
+  @media (max-width: 640px) { .card-pad { padding: 1.15rem; } }
+
+  /* Лёгкий подъём карточки при наведении (для кликабельных карточек) */
+  .card-lift { transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+  .card-lift:hover { transform: translateY(-2px); box-shadow: var(--shadow-card-hover); border-color: var(--line); }
+
+  .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; margin-bottom: 1.1rem; }
+  .card-title { font-size: .95rem; font-weight: 700; letter-spacing: -.01em; color: var(--ink); }
+  .card-sub { font-size: .78rem; color: var(--ink-mute); margin-top: .2rem; line-height: 1.45; }
+
+  /* Мягкая пастельная подложка с иконкой для заголовков карточек */
+  .card-heading { display: flex; align-items: flex-start; gap: .75rem; min-width: 0; }
+  .card-icon { flex: none; display: grid; place-items: center; width: 2.35rem; height: 2.35rem;
+               border-radius: .9rem; font-size: 1.05rem; line-height: 1;
+               background: var(--accent-soft); color: var(--accent); }
+  .card-icon--safe    { background: var(--safe-soft);   color: var(--safe); }
+  .card-icon--caution { background: var(--warn-soft);   color: var(--warn); }
+  .card-icon--trigger { background: var(--danger-soft); color: var(--danger); }
+  .card-icon--neutral { background: var(--surface-3);   color: var(--ink-mute); }
+
+  /* Ограничение ширины контейнера: на широком ноутбуке карточки не растягиваются */
+  .page-container { width: 100%; max-width: 72rem; margin-inline: auto; padding-inline: 1rem; }
+  @media (min-width: 640px) { .page-container { padding-inline: 1.5rem; } }
+
+  /* Шапка и подвал */
+  .app-header { background: var(--card); border-bottom: 1px solid var(--line); }
+  @supports (background: color-mix(in srgb, red 50%, transparent)) {
+    .app-header { background: color-mix(in srgb, var(--card) 88%, transparent); backdrop-filter: blur(10px); }
+  }
+  .app-footer { background: var(--surface-2); border-top: 1px solid var(--line); }
+
+  /* Переключатель темы */
+  .theme-switch { display: inline-flex; align-items: center; gap: .15rem; padding: .16rem;
+                  background: var(--surface-3); border: 1px solid var(--line); border-radius: .75rem; }
+  .theme-btn { display: inline-flex; align-items: center; gap: .35rem; font-size: .74rem; font-weight: 600;
+               padding: .3rem .5rem; border-radius: .58rem; border: 1px solid transparent;
+               color: var(--ink-mute); background: transparent; cursor: pointer;
+               transition: background-color .15s ease, color .15s ease; }
+  .theme-btn:hover { color: var(--ink-soft); }
+  .theme-btn.is-active { background: var(--card); color: var(--accent);
+                         border-color: var(--line); box-shadow: 0 1px 2px rgba(15,23,42,.08); }
+  .theme-btn__label { display: none; }
+  @media (min-width: 640px) { .theme-btn__label { display: inline; } }
+
+  /* Бейджи статусов */
+  .badge { display: inline-flex; align-items: center; gap: .3rem; font-size: .72rem; font-weight: 600;
+           padding: .16rem .55rem; border-radius: 999px; white-space: nowrap; line-height: 1.5; }
+  .badge-safe    { background: var(--safe-soft);   color: var(--safe);   box-shadow: inset 0 0 0 1px var(--safe-ring); }
+  .badge-caution { background: var(--warn-soft);   color: var(--warn);   box-shadow: inset 0 0 0 1px var(--warn-ring); }
+  .badge-trigger { background: var(--danger-soft); color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger-ring); }
+  .badge-neutral { background: var(--surface-3);   color: var(--ink-mute); box-shadow: inset 0 0 0 1px var(--line); }
+  .badge-tag     { background: var(--card);        color: var(--ink-soft); box-shadow: inset 0 0 0 1px var(--line); }
+
+  /* Кнопки — крупнее и тактильнее, с плавным откликом */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: .45rem;
+         font-size: .875rem; font-weight: 500; padding: .625rem 1rem; border-radius: .75rem;
+         border: 1px solid transparent; cursor: pointer; line-height: 1.25;
+         transition: background-color .18s ease, border-color .18s ease, color .18s ease,
+                     transform .18s ease, box-shadow .18s ease; }
+  .btn:hover:not(:disabled) { transform: translateY(-1px); }
+  .btn:active:not(:disabled) { transform: translateY(0); }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn:disabled { opacity: .55; cursor: not-allowed; }
+  .btn-primary { background: var(--accent-fill); color: var(--on-accent); box-shadow: 0 1px 2px rgba(15,23,42,.12); }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-fill-hover); box-shadow: 0 6px 16px -6px rgba(46,125,107,.5); }
+  .btn-ghost { background: var(--card); border-color: var(--line); color: var(--ink-soft); }
+  .btn-ghost:hover:not(:disabled) { border-color: var(--line-strong); background: var(--surface-2); }
+  .btn-soft { background: var(--accent-soft); color: var(--accent); }
+  .btn-soft:hover:not(:disabled) { background: var(--accent-soft-strong); }
+  .btn-danger { background: var(--danger-soft); color: var(--danger); }
+  .btn-danger:hover:not(:disabled) { background: var(--danger-soft); border-color: var(--danger-ring); }
+  .btn-sm { font-size: .78rem; padding: .3rem .65rem; border-radius: .6rem; }
+  /* Крупная «плитка»-действие (например, «Отметить приступ») */
+  .btn-tile { display: flex; flex-direction: column; align-items: flex-start; gap: .15rem;
+              width: 100%; padding: 1rem 1.1rem; border-radius: 1rem; text-align: left;
+              font-size: .9rem; font-weight: 600; }
+  .btn-tile__hint { font-size: .72rem; font-weight: 400; opacity: .85; }
+
+  /* Поля */
+  .field { width: 100%; font-size: .84rem; padding: .55rem .75rem; border-radius: .75rem;
+           border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+  .field:focus { outline: 2px solid var(--accent-soft); outline-offset: 0; border-color: var(--accent); }
+  .field::placeholder { color: var(--ink-mute); }
+  .label { display: block; font-size: .72rem; font-weight: 700; text-transform: uppercase;
+           letter-spacing: .06em; color: var(--ink-mute); margin-bottom: .3rem; }
+  input[type="checkbox"] { accent-color: var(--accent); }
+
+  /* Сегментированные переключатели (симптомы, стул) */
+  .seg { border: 1px solid var(--line); background: var(--card); border-radius: .5rem;
+         padding: .4rem .2rem; font-size: .76rem; font-weight: 600; color: var(--ink-soft);
+         transition: transform .18s ease, background-color .18s ease, border-color .18s ease;
+         cursor: pointer; text-align: center; }
+  .seg:hover { border-color: var(--line-strong); transform: translateY(-1px); }
+  .seg[aria-pressed="true"] { color: var(--seg-ink); border-color: transparent; }
+  .seg[aria-pressed="true"].tone-safe    { background: var(--safe-fill); }
+  .seg[aria-pressed="true"].tone-caution { background: var(--warn-fill); }
+  .seg[aria-pressed="true"].tone-trigger { background: var(--danger-fill); }
+  .seg[aria-pressed="true"].tone-neutral { background: var(--neutral-fill); }
+
+  /* ------------------------------------------------------------------ *
+   * Яркая подсветка выбранных кнопок шкалы 0-3 и стула.
+   * Активная кнопка получает насыщенную заливку, белую надпись, тень и
+   * слегка увеличивается — чтобы сразу было видно, что выбрано.
+   * ------------------------------------------------------------------ */
+  .severity-btn { position: relative; }
+  .severity-btn[aria-pressed="true"],
+  .severity-btn.is-active {
+    color: #FFFFFF !important; border-color: transparent !important;
+    transform: scale(1.06); z-index: 1;
+    box-shadow: 0 2px 8px rgba(0,0,0,.18);
+  }
+  .severity-btn[aria-pressed="true"].tone-safe,
+  .severity-btn.is-active.tone-safe {
+    background: #2E7D6B !important;  /* зелёно-шалфейный */
+  }
+  .severity-btn[aria-pressed="true"].tone-caution,
+  .severity-btn.is-active.tone-caution {
+    background: #0A9C9C !important;  /* мягкая бирюза */
+  }
+  .severity-btn[aria-pressed="true"].tone-trigger,
+  .severity-btn.is-active.tone-trigger {
+    background: #D97706 !important;  /* янтарный / песочный */
+  }
+  .severity-btn[aria-pressed="true"].tone-danger,
+  .severity-btn.is-active.tone-danger {
+    background: #DC2626 !important;  /* кораллово-красный */
+  }
+
+  .stool-btn { position: relative; }
+  .stool-btn[aria-pressed="true"],
+  .stool-btn.is-active {
+    color: #FFFFFF !important; border-color: transparent !important;
+    background: var(--accent-fill) !important;
+    box-shadow: 0 0 0 2px var(--accent), 0 2px 8px rgba(0,0,0,.18);
+    transform: scale(1.04); z-index: 1;
+  }
+
+  /* Тег-чипы — компактные, чтобы не шуметь в шапке */
+  .tagchip { display: inline-flex; align-items: center; gap: .3rem; font-size: .7rem; font-weight: 600;
+             padding: .12rem .5rem; border-radius: 999px; background: var(--card);
+             border: 1px solid var(--line); white-space: nowrap; }
+
+  /* Вкладки */
+  .tabbtn { display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap;
+            font-size: .84rem; font-weight: 600; padding: .5rem .85rem; border-radius: .7rem;
+            color: var(--ink-mute); border: 1px solid transparent; cursor: pointer;
+            transition: background-color .18s ease, color .18s ease, border-color .18s ease; }
+  .tabbtn:hover { color: var(--ink-soft); background: var(--surface-2); }
+  .tabbtn[aria-current="page"] { background: var(--card); color: var(--accent); border-color: var(--line);
+                                 box-shadow: 0 1px 2px rgba(15,23,42,.06); }
+
+  /* Карточки-плитки тегов-ограничений (вкладка «Настройки») */
+  .tag-grid { display: grid; grid-template-columns: 1fr; gap: .75rem; }
+  @media (min-width: 768px) { .tag-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .tag-card { --tag-color: var(--accent);
+              display: flex; align-items: flex-start; gap: .7rem; cursor: pointer;
+              padding: .85rem .95rem; border: 1px solid var(--line); border-radius: .9rem;
+              background: var(--card); transition: border-color .15s ease, background-color .15s ease; }
+  .tag-card:hover { border-color: var(--line-strong); background: var(--surface-2); }
+  .tag-card.is-active { border-color: var(--tag-color); background: var(--accent-soft);
+                        box-shadow: inset 0 0 0 1px var(--tag-color); }
+  .tag-card input[type="checkbox"] { margin-top: .15rem; flex: none; }
+  .tag-card__head { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+  .tag-card__title { font-size: .875rem; font-weight: 700; color: var(--ink); }
+  .tag-card__desc { display: block; margin-top: .25rem; font-size: .78rem; line-height: 1.45; color: var(--ink-soft); }
+  .tag-card__meta { display: block; margin-top: .3rem; font-size: .72rem; line-height: 1.4; color: var(--ink-mute); }
+
+  /* Тихая подложка для вложенных блоков */
+  .inline-panel { background: var(--surface-2); border: 1px solid var(--line); border-radius: .9rem; }
+  .row-hover { border-radius: .75rem; transition: background-color .18s ease; }
+  .row-hover:hover { background: var(--surface-2); }
+  .progress-track { background: var(--track); }
+
+  /* ------------------------------------------------------------------ *
+   * Календарь приёмов НПВС — строгая локальная сетка.
+   * Без неё 30 квадратиков растягиваются синим прямоугольником на весь
+   * экран. Компактная полоска: 30 маленьких квадратов в две строки по 15.
+   * ------------------------------------------------------------------ */
+  .nsaid-calendar { display: grid; grid-template-columns: repeat(15, 14px); gap: 4px; }
+  .nsaid-calendar > * { width: 14px; height: 14px; border-radius: 4px; flex: none; }
+  .nsaid-calendar-0 { background: var(--track); }
+  .nsaid-calendar-1 { background: var(--heat-1); }
+  .nsaid-calendar-2 { background: var(--heat-2); }
+  .nsaid-calendar-3 { background: var(--heat-3); }
+
+  /* ------------------------------------------------------------------ *
+   * Списки с маркером.
+   * Маркер рисуется через ::before, а не символом в тексте: иначе при
+   * загруженном и незагруженном Tailwind список выглядел бы по-разному
+   * (Tailwind снимает list-style, браузер по умолчанию — нет), и
+   * получались бы двойные буллиты «• •».
+   * ------------------------------------------------------------------ */
+  .bullet-list { list-style: none; margin: 0; padding: 0; }
+  .bullet-list > li { position: relative; padding-left: .95rem; }
+  .bullet-list > li::before { content: "•"; position: absolute; left: 0; top: 0;
+                              color: var(--accent); line-height: inherit; }
+
+  /* ------------------------------------------------------------------ *
+   * Метрики отчёта и выравнивание таблиц
+   * ------------------------------------------------------------------ */
+  .metric-grid { display: grid; grid-template-columns: 1fr; gap: .75rem; }
+  @media (min-width: 700px) { .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (min-width: 1000px) { .metric-grid--three { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .metric { background: var(--surface-2); border: 1px solid var(--line); border-radius: .9rem;
+            padding: .8rem .9rem; }
+  .metric__label { display: block; font-size: .68rem; font-weight: 700; text-transform: uppercase;
+                   letter-spacing: .06em; color: var(--ink-mute); }
+  .metric__value { display: flex; align-items: baseline; gap: .4rem; margin-top: .3rem;
+                   font-size: 1.5rem; font-weight: 700; line-height: 1.1; color: var(--ink); }
+  .metric__unit { font-size: .78rem; font-weight: 500; color: var(--ink-mute); }
+  .metric__hint { display: block; margin-top: .35rem; font-size: .72rem; line-height: 1.4; color: var(--ink-mute); }
+  .metric__row { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .4rem; }
+
+  .num { text-align: center; font-variant-numeric: tabular-nums; }
+  .num-left { text-align: left; }
+  .num-right { text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* Тепловая полоса счётчика НПВС — устарела, заменена на nsaid-calendar */
+
+  .prose-note { font-size: .8rem; line-height: 1.55; color: var(--ink-soft); white-space: pre-wrap; }
+  .memo-box { font-size: .78rem; line-height: 1.5; color: var(--ink-soft); white-space: pre-wrap;
+              background: var(--surface-2); border: 1px dashed var(--line); border-radius: .75rem; padding: .8rem .9rem; }
+  .divider { height: 1px; background: var(--line); }
+  .scroll-x { overflow-x: auto; scrollbar-width: thin; }
+  .scroll-x::-webkit-scrollbar { height: 6px; }
+  .scroll-x::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 3px; }
+
+  /* Тосты */
+  .toast { position: fixed; z-index: 60; right: 1rem; bottom: 1rem; max-width: min(92vw, 26rem);
+           border-radius: .85rem; padding: .7rem .9rem; font-size: .82rem; font-weight: 600;
+           box-shadow: 0 18px 40px -18px rgba(15,23,42,.35); }
+
+  /* ------------------------------------------------------------------ *
+   * Печать: отчёт для врача — один лист A4.
+   *
+   * Независимо от выбранной темы (в том числе тёмной) отчёт всегда
+   * печатается светлым, строгим стилем на белом листе: переменные темы
+   * принудительно переопределяются ниже. Блок идёт последним в таблице
+   * стилей, поэтому при равной специфичности побеждает по порядку.
+   * ------------------------------------------------------------------ */
+  @media print {
+    @page { size: A4 portrait; margin: 9mm 10mm; }
+
+    :root,
+    :root[data-theme] {
+      color-scheme: light;
+      --canvas: #FFFFFF;
+      --card: #FFFFFF;
+      --surface-2: #FFFFFF;
+      --surface-3: #F8FAFC;
+      --track: #EDF1F5;
+      --line: #D9E0E8;
+      --line-soft: #E7EBF0;
+      --line-strong: #B9C2CC;
+      --ink: #0F172A;
+      --ink-soft: #334155;
+      --ink-mute: #475569;
+      --accent: #2E7D6B;
+      --accent-strong: #276A5B;
+      --accent-soft: #E9F3EF;
+      --accent-soft-strong: #E9F3EF;
+      --accent-fill: #2E7D6B;
+      --accent-fill-hover: #2E7D6B;
+      --on-accent: #FFFFFF;
+      --safe: #1F6B5A;   --safe-soft: #E8F5F0;   --safe-ring: #BFE3D8;   --safe-fill: #1F6B5A;
+      --warn: #8A6A16;   --warn-soft: #FDF6E3;   --warn-ring: #F0E0B0;   --warn-fill: #C79A2E;
+      --danger: #9B3B3B; --danger-soft: #FDECEC; --danger-ring: #F5CFCF; --danger-fill: #9B3B3B;
+      --neutral-fill: #64748B;
+      --seg-ink: #FFFFFF;
+      --heat-1: #C7DFD8; --heat-2: #F0D9A8; --heat-3: #E9B4B4;
+      --tag-gerd: #9A5526; --tag-fodmap: #4C5D91; --tag-purine: #2C6C82;
+      --tag-migraine: #6A4C8C; --tag-cardio: #93414F;
+      --shadow-card: none;
+      --shadow-card-hover: none;
+    }
+
+    html, body { background: #FFFFFF !important; color: #0F172A !important; font-size: 9.5pt; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .no-print { display: none !important; }
+    main { max-width: none !important; padding: 0 !important; margin: 0 !important; }
+    .print-area { box-shadow: none !important; border: 0 !important; border-radius: 0 !important;
+                  background: #FFFFFF !important; padding: 0 !important; }
+    .print-card { break-inside: avoid; page-break-inside: avoid; border: 1px solid #D9E0E8 !important;
+                  border-radius: 5px !important; box-shadow: none !important; background: #FFFFFF !important; }
+    .print-table { font-size: 8.2pt; }
+    .print-table th, .print-table td { padding: 1.5px 3px !important; vertical-align: top; }
+    .print-table th.num, .print-table td.num { text-align: center; }
+    .print-tight .print-table { font-size: 7.2pt; }
+    .print-tight .print-table th, .print-tight .print-table td { padding: 1px 2px !important; }
+    .metric { background: #FFFFFF !important; break-inside: avoid; }
+    .metric-grid { gap: 4px !important; }
+    .print-muted { color: #475569 !important; }
+    .badge { box-shadow: inset 0 0 0 .5pt currentColor; }
+    a { text-decoration: none !important; color: inherit !important; }
+  /* Утилитарные классы см. в /static/app.css (локальный файл, без CDN). */
+</style>
+</head>
+
+<body class="h-full">
+
+<!-- Предупреждение о недоступном JS-рантайме.
+     Пока что локальный рантайм (DiaryRuntime) загружается со страницей
+     скриптом ниже, так что это сообщение — на случай ошибки загрузки
+     app.js. -->
+<script>
+  (function () {
+    if (typeof DiaryRuntime !== 'undefined') return;
+    // Если через 1.5 с после загрузки рантайм не появился — показываем
+    // альтернативу с API-ссылками.
+    var check = setInterval(function () {
+      if (typeof DiaryRuntime !== 'undefined') { clearInterval(check); return; }
+    }, 1500);
+  })();
+</script>
+
+<div x-data="diary()" x-init="init()" x-cloak class="min-h-full">
+
+  <!-- ============================ Шапка ============================ -->
+  <header class="no-print app-header sticky top-0 z-30">
+    <div class="page-container max-w-6xl mx-auto px-4 sm:px-6">
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-3 pb-2 pt-3">
+        <div class="flex items-center gap-3">
+          <div class="card-icon" aria-hidden="true">🩺</div>
+          <div class="min-w-0">
+            <h1 class="text-[15px] font-bold leading-tight truncate"
+                x-text="boot ? boot.app.name : 'Дневник питания и самонаблюдения'"></h1>
+            <p class="text-xs text-slate-500 truncate"
+               x-text="boot ? boot.app.tagline : 'Еда, симптомы и лекарства — в одном месте'"></p>
+          </div>
+        </div>
+
+        <div class="ml-auto flex flex-wrap items-center gap-2">
+          <!-- Переключатель темы: выбор сохраняется в localStorage -->
+          <div class="theme-switch" role="group" aria-label="Тема оформления">
+            <template x-for="option in themes" :key="option.id">
+              <button type="button" class="theme-btn"
+                      :class="{ 'is-active': theme === option.id }"
+                      :aria-pressed="theme === option.id"
+                      :title="'Тема: ' + option.label"
+                      @click="setTheme(option.id)">
+                <span x-text="option.icon"></span>
+                <span class="theme-btn__label" x-text="option.label"></span>
+              </button>
+            </template>
+          </div>
+
+          <!-- Текущая дата: 「18 ноября 2026」 + счётчик записей за сегодня -->
+          <span class="badge badge-neutral" :title="todayRecordsTitle()">
+            <span x-text="todayLabel()"></span>
+            <span x-show="todayRecords()">· <span x-text="todayRecords()"></span></span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Активные теги-ограничения: одна компактная строка -->
+      <div class="scroll-x flex items-center gap-1.5 pb-2" x-show="boot">
+        <span class="hidden text-[10px] uppercase tracking-wide text-slate-400 sm:inline">Ограничения</span>
+        <template x-for="tag in activeTags()" :key="tag.id">
+          <span class="tagchip" :style="'color:' + tagColor(tag.id)" :title="tag.label">
+            <span x-text="tag.icon"></span><span x-text="tag.short"></span>
+          </span>
+        </template>
+        <span class="tagchip text-slate-400" x-show="!activeTags().length">не выбраны</span>
+      </div>
+
+      <!-- Вкладки -->
+      <nav class="scroll-x flex items-center gap-1 pb-2" aria-label="Разделы">
+        <template x-for="item in tabs" :key="item.key">
+          <button class="tabbtn" type="button"
+                  :aria-current="tab === item.key ? 'page' : null"
+                  @click="switchTab(item.key)">
+            <span x-text="item.icon"></span><span x-text="item.label"></span>
+            <span class="badge badge-neutral" x-show="item.key === 'today' && dayBadge()"
+                  x-text="dayBadge()"></span>
+          </button>
+        </template>
+      </nav>
+    </div>
+  </header>
+
+  <main class="page-container max-w-6xl mx-auto px-4 pb-24 pt-6 sm:px-6">
+
+    <!-- Баннер, если база пустая -->
+    <div x-show="boot && boot.needs_seed" class="no-print card card-pad mb-4"
+         style="border-color:var(--warn-ring);background:var(--warn-soft)">
+      <p class="text-sm font-semibold" style="color:var(--warn)">Профиль ещё не создан</p>
+      <p class="card-sub" style="color:var(--warn)">
+        Выполните <code>python seed_data.py</code>, чтобы создать профиль, каталог продуктов и блюд.
+      </p>
+    </div>
+
+    <!-- ============================================================= -->
+    <!-- ВКЛАДКА «СЕГОДНЯ»                                             -->
+    <!-- ============================================================= -->
+    <section x-show="tab === 'today'" class="space-y-6">
+
+      <div class="no-print card card-pad flex flex-wrap items-end gap-3">
+        <div>
+          <label class="label" for="today-date">Дата записи</label>
+          <input id="today-date" type="date" class="field" style="max-width:11rem"
+                 x-model="date" @change="loadToday()">
+        </div>
+        <button class="btn btn-ghost btn-sm" type="button" @click="date = today; loadToday()">Сегодня</button>
+        <button class="btn btn-ghost btn-sm" type="button" @click="shiftDate(-1)">← День назад</button>
+        <button class="btn btn-ghost btn-sm" type="button" @click="shiftDate(1)">День вперёд →</button>
+        <p class="text-xs text-slate-500 sm:ml-auto" x-show="snapshot && snapshot.profile"
+           x-text="'Профиль: ' + (snapshot ? snapshot.profile.name : '')"></p>
+      </div>
+
+      <!-- --------------- Итоги за сегодня --------------- -->
+      <div class="card card-pad" x-show="snapshot">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-2.5">
+            <div class="card-icon" aria-hidden="true">📊</div>
+            <div>
+              <h2 class="card-title">Итоги за сегодня</h2>
+              <p class="card-sub" x-show="!hasSymptoms()">Пока не заполнено</p>
+              <p class="card-sub" x-show="hasSymptoms()">
+                <span class="badge badge-safe">✓ Запись за сегодня сохранена</span>
+                <span class="text-slate-400 ml-1 text-[11px]" x-text="flash.symptoms || ''"></span>
+              </p>
+            </div>
+          </div>
+          <span class="badge" :class="scoreBadge().cls" x-text="scoreBadge().text"></span>
+        </div>
+
+        <!-- Компактные чипы активных симптомов -->
+        <div class="flex flex-wrap gap-1.5 mt-3" x-show="hasSymptoms()">
+          <template x-for="chip in activeSymptomChips()" :key="chip.label">
+            <span class="badge" :class="chip.value >= 3 ? 'badge-trigger' : (chip.value >= 2 ? 'badge-caution' : 'badge-safe')">
+              <span x-text="chip.label + ': ' + chip.value"></span>
+            </span>
+          </template>
+          <span class="badge badge-neutral" x-show="stoolLabel()" title="Характер стула">
+            🚽 <span x-text="stoolLabel()"></span>
+          </span>
+          <span class="badge badge-safe" x-show="water && water.glasses > 0">
+            💧 <span x-text="water.glasses + ' ' + plural(water.glasses, 'ст.', 'ст.', 'ст.')"></span>
+          </span>
+          <template x-for="medName in todayMeds()" :key="medName">
+            <span class="badge badge-tag">💊 <span x-text="medName"></span></span>
+          </template>
+        </div>
+
+        <!-- Вариант «нет данных» -->
+        <p class="text-xs text-slate-400 mt-2" x-show="!hasSymptoms() && (!water || water.glasses === 0) && !todayMeds().length">
+          Заполните чек-ин симптомов, отметьте препараты и воду — здесь появится сводка дня.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+
+        <!-- ---------------- Чек-ин симптомов ---------------- -->
+        <div class="card card-pad">
+          <div class="card-head">
+            <div class="card-heading">
+              <div class="card-icon" aria-hidden="true">📝</div>
+              <div>
+                <h2 class="card-title">Быстрый чек-ин симптомов</h2>
+                <p class="card-sub">Отметьте, что было за день. Запись сохраняется на выбранную дату и её можно изменить.</p>
+              </div>
+            </div>
+            <span class="badge" :class="scoreBadge().cls" x-text="scoreBadge().text"></span>
+          </div>
+
+          <div class="space-y-3">
+            <template x-for="symptom in (boot ? boot.symptoms : [])" :key="symptom.key">
+              <div>
+                <div class="mb-1 flex flex-wrap items-baseline gap-2">
+                  <span class="text-sm font-semibold" x-text="symptom.label"></span>
+                  <span class="text-xs text-slate-400" x-text="symptom.hint"></span>
+                  <span class="ml-auto flex gap-1">
+                    <template x-for="tagId in symptom.tags" :key="tagId">
+                      <span class="badge badge-tag" x-show="isTagActive(tagId)"
+                            x-text="tagShort(tagId)"></span>
+                    </template>
+                  </span>
+                </div>
+                <div class="grid grid-cols-4 gap-1.5">
+                  <template x-for="option in (boot ? boot.severity_scale : [])" :key="option.value">
+                    <button type="button" class="seg severity-btn"
+                            :class="'tone-' + option.tone + (form.symptoms[symptom.key] === option.value ? ' is-active' : '')"
+                            :aria-pressed="form.symptoms[symptom.key] === option.value"
+                            @click="form.symptoms[symptom.key] = option.value">
+                     <span x-text="option.label"></span>
+                   </button>
+                  </template>
+                </div>
+              </div>
+            </template>
+
+            <div>
+              <span class="label">Характер стула</span>
+              <div class="flex flex-wrap gap-1.5">
+                <template x-for="option in (boot ? boot.stool_options : [])" :key="option.value">
+                  <button type="button" class="seg stool-btn px-3"
+                          :class="'tone-' + option.tone + (form.symptoms.stool === option.value ? ' is-active' : '')"
+                          :aria-pressed="form.symptoms.stool === option.value"
+                          @click="form.symptoms.stool = option.value">
+                   <span x-text="option.label"></span>
+                  </button>
+                </template>
+              </div>
+            </div>
+
+            <div>
+              <label class="label" for="symptom-note">Заметка за день</label>
+              <textarea id="symptom-note" class="field" rows="2" maxlength="2000"
+                        placeholder="Например: после обеда вздутие, вечером изжога после чая"
+                        x-model="form.symptoms.note"></textarea>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <button class="btn btn-primary" type="button" @click="saveSymptoms()" :disabled="busy">
+                <span x-text="busy ? 'Сохраняю…' : 'Сохранить чек-ин'"></span>
+              </button>
+              <button class="btn btn-ghost" type="button" @click="clearSymptoms()"
+                      x-show="snapshot && snapshot.symptoms">Очистить день</button>
+              <span class="badge badge-safe" x-show="flash.symptoms" x-text="flash.symptoms"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ---------------- Головная боль: компактный статус + раскрытие ---------------- -->
+        <div class="card card-pad">
+          <div class="card-head">
+            <div class="card-heading">
+              <div class="card-icon card-icon--caution" aria-hidden="true">🧠</div>
+              <div>
+                <h2 class="card-title">Головная боль</h2>
+                <p class="card-sub">Отмечайте только реальные приступы — тогда статистика и отчёт будут честными.</p>
+              </div>
+            </div>
+            <span class="badge" :class="snapshot && snapshot.headaches.length ? 'badge-caution' : 'badge-safe'"
+                  x-text="headacheCountLabel()"></span>
+          </div>
+
+          <!-- Компактный статус дня -->
+          <div class="inline-panel p-4" x-show="!snapshot || !snapshot.headaches.length">
+            <p class="text-sm font-semibold" style="color:var(--safe)" x-text="headacheStatusText()"></p>
+            <p class="card-sub">Если приступ был — отметьте его, и он попадёт в отчёт и в счётчик обезболивающих.</p>
+          </div>
+
+          <!-- Уже записанные за день эпизоды -->
+          <div class="space-y-2" x-show="snapshot && snapshot.headaches.length">
+            <span class="label">Эпизоды за день</span>
+            <template x-for="episode in (snapshot ? snapshot.headaches : [])" :key="episode.id">
+              <div class="row-hover flex flex-wrap items-center gap-2 border border-slate-100 px-3 py-2.5">
+                <span class="badge" :class="episode.intensity >= 7 ? 'badge-trigger' : (episode.intensity >= 4 ? 'badge-caution' : 'badge-safe')"
+                      x-text="episode.intensity + '/10'"></span>
+                <span class="text-xs font-semibold" x-text="sideLabel(episode.side)"></span>
+                <span class="text-xs text-slate-500" x-show="episode.duration_hours"
+                      x-text="episode.duration_hours + ' ч'"></span>
+                <span class="text-xs text-slate-500" x-show="episode.log_time" x-text="episode.log_time"></span>
+                <span class="badge badge-neutral" x-show="episode.medication"
+                      x-text="episode.medication + (episode.dose ? ' · ' + episode.dose : '')"></span>
+                <span class="text-xs text-slate-400" x-show="episode.triggers.length"
+                      x-text="episode.triggers.join(', ')"></span>
+                <span class="text-xs text-slate-400" x-show="episode.note" x-text="episode.note"></span>
+                <button class="btn btn-danger btn-sm ml-auto" type="button"
+                        @click="deleteHeadache(episode.id)">Удалить</button>
+              </div>
+            </template>
+          </div>
+
+          <!-- Крупное действие: раскрывает форму -->
+          <div class="mt-4">
+            <button type="button" class="btn btn-primary btn-tile" x-show="!headacheFormOpen"
+                    @click="openHeadacheForm()">
+              <span>➕ Отметить приступ</span>
+              <span class="btn-tile__hint">сторона, интенсивность, лекарство</span>
+            </button>
+            <button type="button" class="btn btn-ghost w-full" x-show="headacheFormOpen"
+                    @click="closeHeadacheForm()">Свернуть форму</button>
+          </div>
+
+          <!-- Форма приступа (прогрессивное раскрытие) -->
+          <div class="mt-4 space-y-3" x-show="headacheFormOpen" x-transition.opacity>
+            <div class="divider"></div>
+
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div class="col-span-2 sm:col-span-1">
+                <label class="label" for="hb-side">Сторона</label>
+                <select id="hb-side" class="field" x-model="form.headache.side">
+                  <option value="">— выберите —</option>
+                  <template x-for="option in headacheSideOptions()" :key="option.value">
+                    <option :value="option.value" x-text="option.label"></option>
+                  </template>
+                </select>
+              </div>
+              <div class="col-span-2 sm:col-span-1">
+                <label class="label" for="hb-time">Время</label>
+                <input id="hb-time" type="time" class="field" x-model="form.headache.log_time">
+              </div>
+              <div>
+                <label class="label" for="hb-intensity">Сила <span x-text="num(form.headache.intensity, 0) + '/10'"></span></label>
+                <input id="hb-intensity" type="range" min="1" max="10" class="w-full"
+                       x-model.number="form.headache.intensity">
+              </div>
+              <div>
+                <label class="label" for="hb-duration">Длительность, ч</label>
+                <input id="hb-duration" type="number" min="0" max="240" step="0.5" class="field"
+                       x-model.number="form.headache.duration_hours">
+              </div>
+            </div>
+
+            <div>
+              <span class="label">Возможные триггеры</span>
+              <div class="flex flex-wrap gap-1.5">
+                <template x-for="trigger in triggerOptions" :key="trigger">
+                  <button type="button" class="seg px-3"
+                          :class="form.headache.triggers.includes(trigger) ? 'tone-caution' : 'tone-neutral'"
+                          :aria-pressed="form.headache.triggers.includes(trigger)"
+                          @click="toggleTrigger(trigger)">
+                    <span x-text="trigger"></span>
+                  </button>
+                </template>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div>
+                <label class="label" for="hb-med">Лекарство</label>
+                <select id="hb-med" class="field" x-model="form.headache.medication_id" @change="onMedicationPick()">
+                  <option value="">— не принимал —</option>
+                  <template x-for="med in (boot ? boot.medications : [])" :key="med.id">
+                    <option :value="String(med.id)" x-text="med.name + (med.is_nsaid ? ' (НПВС)' : '')"></option>
+                  </template>
+                </select>
+              </div>
+              <div>
+                <label class="label" for="hb-med-custom">Или другое</label>
+                <input id="hb-med-custom" class="field" placeholder="Название препарата"
+                       x-model="form.headache.medication_custom" :disabled="!!form.headache.medication_id">
+              </div>
+              <div>
+                <label class="label" for="hb-dose">Доза</label>
+                <input id="hb-dose" class="field" placeholder="1 таблетка" x-model="form.headache.dose">
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3">
+              <label class="flex items-center gap-2 text-xs text-slate-600" x-show="hasHeadacheMedication()">
+                <input type="checkbox" x-model="form.headache.log_intake">
+                <span>Учесть приём в счётчике НПВС</span>
+              </label>
+              <label class="flex items-center gap-2 text-xs text-slate-600">
+                <span>Стало легче</span>
+                <input type="number" min="0" max="10" class="field" style="width:4.5rem"
+                       x-model.number="form.headache.relief">
+              </label>
+            </div>
+
+            <div>
+              <label class="label" for="hb-note">Заметка</label>
+              <input id="hb-note" class="field" placeholder="Например: после недосыпа, светобоязнь"
+                     x-model="form.headache.note">
+            </div>
+
+            <!-- Почему запись заблокирована -->
+            <p class="text-xs" style="color:var(--warn)" x-show="headacheBlockReason()"
+               x-text="headacheBlockReason()"></p>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <button class="btn btn-primary" type="button" @click="addHeadache()"
+                      :disabled="busy || !canSaveHeadache()">Записать эпизод</button>
+              <button class="btn btn-ghost" type="button" @click="closeHeadacheForm()">Отмена</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ---------------- Счётчик НПВС ---------------- -->
+        <div class="card card-pad">
+          <div class="card-head">
+            <div class="card-heading">
+              <div class="card-icon" :class="nsaid && nsaid.tone === 'ok' ? 'card-icon--safe' : (nsaid && nsaid.tone === 'risk' ? 'card-icon--trigger' : 'card-icon--caution')"
+                   aria-hidden="true">💊</div>
+              <div>
+                <h2 class="card-title">Счётчик обезболивающих</h2>
+                <p class="card-sub" x-text="'НПВС за последние ' + (nsaid ? nsaid.window_days : 30) + ' дней'"></p>
+              </div>
+            </div>
+            <span class="badge" :class="'badge-' + (nsaid ? nsaid.tone : 'neutral')"
+                  x-text="nsaid ? nsaid.level_label : '—'"></span>
+          </div>
+
+          <div class="flex flex-wrap items-end gap-x-4 gap-y-2">
+            <div class="metric__value" style="font-size:2.25rem">
+              <span x-text="nsaid ? nsaid.count : 0"></span>
+              <span class="metric__unit" x-text="plural(nsaid ? nsaid.count : 0, 'приём', 'приёма', 'приёмов')"></span>
+            </div>
+            <span class="pb-1 text-xs text-slate-500">
+              <span x-text="'дней с приёмом: ' + (nsaid ? nsaid.days_with_intake : 0)"></span>
+            </span>
+          </div>
+
+          <p class="card-sub mt-2" x-text="nsaid ? nsaid.message : ''"></p>
+
+          <div class="mt-4">
+            <span class="label">Календарь приёмов (за <span x-text="nsaid ? nsaid.window_days : 30"></span> дней)</span>
+            <div class="nsaid-calendar">
+              <template x-for="day in (nsaid ? nsaid.heatmap : [])" :key="day.date">
+                <div :class="'nsaid-calendar-' + Math.min(3, day.count)"
+                     :title="humanDate(day.date) + ' — приёмов: ' + day.count"></div>
+              </template>
+            </div>
+            <div class="mt-1 flex justify-between text-[11px] text-slate-400">
+              <span x-text="nsaid ? humanDate(nsaid.window.from) : ''"></span>
+              <span x-text="nsaid ? humanDate(nsaid.window.to) : ''"></span>
+            </div>
+          </div>
+
+          <ul class="bullet-list mt-4 space-y-1.5" x-show="nsaid && nsaid.warnings.length">
+            <template x-for="warning in (nsaid ? nsaid.warnings : [])" :key="warning.tag_short">
+              <li class="text-xs leading-snug text-slate-600">
+                <b x-text="warning.tag_short"></b>: <span x-text="warning.text"></span>
+              </li>
+            </template>
+          </ul>
+
+          <div class="inline-panel mt-3 p-3 text-xs" style="background:var(--warn-soft);color:var(--warn);border-color:var(--warn-ring)"
+               x-show="nsaid && nsaid.moh.nsaid_overuse">
+            Дней с НПВС <b x-text="nsaid ? nsaid.moh.nsaid_days : 0"></b> из
+            <b x-text="nsaid ? nsaid.moh.nsaid_limit : 10"></b> — достигнут порог абузусной головной боли.
+            Обсудите с врачом профилактику, а не увеличение дозы.
+          </div>
+
+          <p class="mt-3 text-[11px] leading-snug text-slate-400">
+            Счётчик напоминает о рисках и не заменяет назначение врача.
+          </p>
+        </div>
+
+        <!-- ---------------- Препараты и вода ---------------- -->
+        <div class="space-y-6">
+          <div class="card card-pad">
+            <div class="card-head">
+              <div class="card-heading">
+                <div class="card-icon card-icon--safe" aria-hidden="true">✅</div>
+                <div>
+                  <h2 class="card-title">Регулярные препараты</h2>
+                  <p class="card-sub">Отметьте принятое — это попадёт в отчёт для врача.</p>
+                </div>
+              </div>
+              <span class="badge badge-neutral"
+                    x-text="(snapshot ? snapshot.checklist.taken_count : 0) + '/' + (snapshot ? snapshot.checklist.total : 0)"></span>
+            </div>
+
+            <div class="space-y-2">
+              <template x-for="item in (snapshot ? snapshot.checklist.items : [])" :key="item.id">
+                <label class="row-hover flex cursor-pointer items-start gap-3 border border-slate-100 px-3 py-2.5">
+                  <input type="checkbox" class="mt-0.5" :checked="item.taken" @change="toggleChecklist(item)">
+                  <span class="min-w-0">
+                    <span class="block text-sm font-semibold" x-text="item.name"></span>
+                    <span class="block text-xs text-slate-500">
+                      <span x-text="[item.dose, item.schedule].filter(Boolean).join(' · ')"></span>
+                    </span>
+                    <span class="mt-0.5 block text-[11px] text-slate-400" x-show="item.purpose" x-text="item.purpose"></span>
+                    <span class="mt-1 block text-[11px]" style="color:var(--tag-cardio)"
+                          x-show="item.cardio_note && isTagActive('cardio_caution')"
+                          x-text="'❤️ Кардио: ' + item.cardio_note"></span>
+                    <span class="mt-0.5 block text-[11px]" style="color:var(--danger)" x-show="item.is_nsaid">
+                      Учитывается в счётчике НПВС
+                    </span>
+                  </span>
+                </label>
+              </template>
+              <p class="text-xs text-slate-400" x-show="snapshot && !snapshot.checklist.items.length">
+                Нет активных регулярных препаратов — добавьте их в разделе «Настройки».
+              </p>
+            </div>
+          </div>
+
+          <div class="card card-pad">
+            <div class="card-head">
+              <div class="card-heading">
+                <div class="card-icon" aria-hidden="true">💧</div>
+                <div>
+                  <h2 class="card-title">Вода</h2>
+                  <p class="card-sub" x-text="'Цель: ' + glassesLabel(water ? water.goal : 8) + ' в день'"></p>
+                </div>
+              </div>
+              <span class="badge" :class="water && water.reached ? 'badge-safe' : 'badge-neutral'"
+                    x-text="water && water.reached ? 'Цель достигнута' : 'В процессе'"></span>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-3">
+              <button class="btn btn-ghost" type="button" aria-label="Убрать стакан"
+                      @click="changeWater(-1)" :disabled="!water || water.glasses <= 0">−</button>
+              <div class="metric__value" style="font-size:2rem">
+                <span x-text="water ? water.glasses : 0"></span>
+                <span class="metric__unit"
+                      x-text="plural(water ? water.glasses : 0, 'стакан', 'стакана', 'стаканов')"></span>
+              </div>
+              <button class="btn btn-primary" type="button" aria-label="Добавить стакан" @click="changeWater(1)">+</button>
+              <div class="text-right text-xs text-slate-500 sm:ml-auto">
+                <div x-show="water && water.remaining" x-text="'Осталось: ' + glassesLabel(water ? water.remaining : 0)"></div>
+                <div x-show="water && water.reached" style="color:var(--safe)">Норма выполнена</div>
+              </div>
+            </div>
+
+            <div class="mt-4 h-2 w-full overflow-hidden rounded-full progress-track">
+              <div class="h-full rounded-full transition-all duration-300"
+                   :style="'width:' + (water ? water.percent : 0) + '%;background:var(--accent)'"></div>
+            </div>
+
+            <div class="mt-4 flex flex-wrap gap-2" x-show="snapshot && snapshot.intakes.length">
+              <span class="label w-full">Приёмы по требованию за день</span>
+              <template x-for="intake in (snapshot ? snapshot.intakes : [])" :key="intake.id">
+                <span class="badge" :class="intake.is_nsaid ? 'badge-trigger' : 'badge-neutral'">
+                  <span x-text="intake.name"></span>
+                  <span x-show="intake.is_nsaid">· НПВС</span>
+                </span>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================= -->
+    <!-- ВКЛАДКА «КОНСТРУКТОР МЕНЮ»                                     -->
+    <!-- ============================================================= -->
+    <section x-show="tab === 'menu'" class="space-y-6">
+      <div class="no-print card card-pad">
+        <div class="flex flex-wrap items-end gap-3">
+          <div>
+            <label class="label" for="menu-date">Дата рациона</label>
+            <input id="menu-date" type="date" class="field" style="max-width:11rem" x-model="menuDate">
+          </div>
+          <div>
+            <label class="label" for="menu-per-slot">Вариантов на приём</label>
+            <input id="menu-per-slot" type="number" min="1" max="4" class="field" style="width:5.5rem"
+                   x-model.number="menuPerSlot">
+          </div>
+          <button class="btn btn-primary" type="button" @click="loadMenu()" :disabled="busy">Сгенерировать рацион</button>
+          <button class="btn btn-ghost" type="button" @click="menuDate = today; loadMenu()">На сегодня</button>
+          <p class="text-xs text-slate-500 sm:ml-auto">
+            Рацион собирается под активные теги:
+            <span class="font-semibold" x-text="activeTags().map(t => t.short).join(', ') || 'теги не выбраны'"></span>
+          </p>
+        </div>
+      </div>
+
+      <template x-if="menu">
+        <div class="space-y-6">
+          <!-- Сводка -->
+          <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div class="card metric">
+              <span class="metric__label">Допустимо продуктов</span>
+              <div class="metric__value" style="color:var(--safe)" x-text="menu.allowed_count"></div>
+            </div>
+            <div class="card metric">
+              <span class="metric__label">Осторожно</span>
+              <div class="metric__value" style="color:var(--warn)" x-text="menu.caution_count"></div>
+            </div>
+            <div class="card metric">
+              <span class="metric__label">Исключено</span>
+              <div class="metric__value" style="color:var(--danger)" x-text="menu.excluded_count"></div>
+            </div>
+            <div class="card metric">
+              <span class="metric__label">Вода в день</span>
+              <div class="metric__value" style="color:var(--accent)">
+                <span x-text="menu.water_goal"></span>
+                <span class="metric__unit" x-text="plural(menu.water_goal, 'стакан', 'стакана', 'стаканов')"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Слоты приёмов -->
+          <div class="grid grid-cols-1 items-start gap-6 md:grid-cols-2">
+            <template x-for="slot in menu.slots" :key="slot.key">
+              <div class="card card-pad">
+                <div class="card-head">
+                  <div class="card-heading">
+                    <div class="card-icon card-icon--neutral" aria-hidden="true" x-text="slot.icon"></div>
+                    <div>
+                      <h3 class="card-title">
+                        <span x-text="slot.label"></span>
+                        <span class="ml-1 text-xs font-normal text-slate-400" x-text="slot.time_hint"></span>
+                      </h3>
+                      <p class="card-sub" x-text="slot.message"></p>
+                    </div>
+                  </div>
+                  <span class="badge" :class="slot.has_safe_options ? 'badge-safe' : (slot.fallback_used ? 'badge-caution' : 'badge-trigger')"
+                        x-text="slot.dishes.length + ' ' + plural(slot.dishes.length, 'вариант', 'варианта', 'вариантов')"></span>
+                </div>
+
+                <div class="space-y-3">
+                  <template x-for="dish in slot.dishes" :key="dish.id">
+                    <div class="rounded-2xl border border-slate-100 p-3.5">
+                      <div class="flex items-start justify-between gap-2">
+                        <h4 class="text-sm font-semibold" x-text="dish.title"></h4>
+                        <span class="badge" :class="'badge-' + dish.tone" x-text="dish.status_label"></span>
+                      </div>
+                      <div class="mt-2 flex flex-wrap gap-1.5">
+                        <template x-for="ingredient in dish.ingredients" :key="ingredient.name">
+                          <span class="badge" :class="'badge-' + ingredient.tone"
+                                :title="ingredient.explain"
+                                x-text="ingredient.name"></span>
+                        </template>
+                      </div>
+                      <p class="mt-2 text-xs leading-relaxed text-slate-600" x-text="dish.recipe"></p>
+                      <template x-if="dish.blocking.length">
+                        <div class="mt-2 rounded-lg p-2 text-[11px]" style="background:var(--danger-soft);color:var(--danger)">
+                          <template x-for="block in dish.blocking" :key="block.name">
+                            <div><b x-text="block.name"></b>:
+                              <span x-text="block.reasons.map(r => r.reason).join(' ')"></span></div>
+                          </template>
+                        </div>
+                      </template>
+                    </div>
+                  </template>
+                  <p class="text-xs text-slate-400" x-show="!slot.dishes.length">
+                    Для этого приёма нет подходящих блюд — ослабьте один из тегов или добавьте свои рецепты.
+                  </p>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
+            <!-- Что исключено -->
+            <div class="card card-pad lg:col-span-2">
+              <div class="card-head">
+                <div class="card-heading">
+                  <div class="card-icon card-icon--trigger" aria-hidden="true">🚫</div>
+                  <div>
+                    <h2 class="card-title">Что исключено и почему</h2>
+                    <p class="card-sub">Продукты, которые нарушают выбранные ограничения. Причины сгруппированы по тегам.</p>
+                  </div>
+                </div>
+                <span class="badge badge-neutral" x-text="menu.excluded.length + ' поз.'"></span>
+              </div>
+
+              <div class="space-y-3">
+                <template x-for="group in menu.excluded_by_tag" :key="group.tag">
+                  <div class="inline-panel p-3.5">
+                    <div class="flex flex-wrap items-baseline gap-2">
+                      <span class="badge badge-tag" :style="'color:' + tagColor(group.tag)">
+                        <span x-text="group.tag_icon"></span><span x-text="group.tag_short"></span>
+                      </span>
+                      <span class="text-xs text-slate-500"
+                            x-text="group.items.length + ' ' + plural(group.items.length, 'продукт', 'продукта', 'продуктов')"></span>
+                    </div>
+                    <p class="mt-1.5 text-xs leading-relaxed text-slate-600"
+                       x-show="group.items.length"
+                       x-text="'Например: ' + group.items.slice(0, 5).join(', ') + (group.items.length > 5 ? ' и другие' : '')"></p>
+                    <p class="mt-1.5 text-xs leading-relaxed text-slate-400"
+                       x-show="!group.items.length">(нет данных)</p>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <!-- Напоминания -->
+            <div class="card card-pad">
+              <div class="card-head">
+                <div class="card-heading">
+                  <div class="card-icon" aria-hidden="true">🥗</div>
+                  <div>
+                    <h2 class="card-title">Как есть в течение дня</h2>
+                    <p class="card-sub">Простые правила, которые снижают нагрузку на желудок и живот.</p>
+                  </div>
+                </div>
+              </div>
+              <ul class="bullet-list space-y-2">
+                <template x-for="rule in menu.rules_reminder" :key="rule">
+                  <li class="text-xs leading-relaxed text-slate-600" x-text="rule"></li>
+                </template>
+              </ul>
+              <div class="divider my-4"></div>
+              <span class="label">Памятка из профиля</span>
+              <div class="memo-box" x-text="menu.memo"></div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <div class="card card-pad" x-show="!menu">
+        <p class="text-sm text-slate-500">Нажмите «Сгенерировать рацион», чтобы собрать безопасное меню на день.</p>
+      </div>
+    </section>
+
+    <!-- ============================================================= -->
+    <!-- ВКЛАДКА «СВЕТОФОР ПРОДУКТОВ»                                  -->
+    <!-- ============================================================= -->
+    <section x-show="tab === 'foods'" class="space-y-6">
+      <div class="no-print card card-pad">
+        <div class="card-head">
+          <div class="card-heading">
+            <div class="card-icon" aria-hidden="true">🚦</div>
+            <div>
+              <h2 class="card-title">Светофор продуктов</h2>
+              <p class="card-sub">Статус каждой позиции рассчитан под ваши активные ограничения — с объяснением причины.</p>
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-[2fr_1fr]">
+          <div>
+            <label class="label" for="food-q">Живой поиск по продуктам</label>
+            <input id="food-q" class="field" placeholder="Например: капуста, кофе, творог…"
+                   x-model="foodQuery" @input.debounce.350ms="loadFoods()">
+          </div>
+          <div>
+            <label class="label" for="food-cat">Категория</label>
+            <select id="food-cat" class="field" x-model="foodCategory" @change="loadFoods()">
+              <option value="all">Все категории</option>
+              <template x-for="category in (foods ? foods.categories : [])" :key="category">
+                <option :value="category" x-text="category"></option>
+              </template>
+            </select>
+          </div>
+        </div>
+
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+          <button type="button" class="badge badge-neutral" style="cursor:pointer"
+                  :style="!foodStatus ? 'box-shadow:inset 0 0 0 2px var(--accent)' : ''"
+                  @click="foodStatus = ''; loadFoods()">
+            Все <span x-text="foods ? foods.scope_total : 0"></span>
+          </button>
+          <button type="button" class="badge badge-safe" style="cursor:pointer"
+                  :style="foodStatus === 'safe' ? 'box-shadow:inset 0 0 0 2px var(--safe)' : ''"
+                  @click="foodStatus = 'safe'; loadFoods()">
+            🟢 Можно <span x-text="foods ? (foods.counts.safe || 0) : 0"></span>
+          </button>
+          <button type="button" class="badge badge-caution" style="cursor:pointer"
+                  :style="foodStatus === 'caution' ? 'box-shadow:inset 0 0 0 2px var(--warn)' : ''"
+                  @click="foodStatus = 'caution'; loadFoods()">
+            🟡 Осторожно <span x-text="foods ? (foods.counts.caution || 0) : 0"></span>
+          </button>
+          <button type="button" class="badge badge-trigger" style="cursor:pointer"
+                  :style="foodStatus === 'trigger' ? 'box-shadow:inset 0 0 0 2px var(--danger)' : ''"
+                  @click="foodStatus = 'trigger'; loadFoods()">
+            🔴 Исключить <span x-text="foods ? (foods.counts.trigger || 0) : 0"></span>
+          </button>
+          <span class="ml-auto text-xs text-slate-400" x-text="'найдено: ' + (foods ? foods.total : 0)"></span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <template x-for="item in (foods ? foods.items : [])" :key="item.id">
+          <div class="card card-pad card-lift">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <h3 class="text-sm font-semibold leading-snug" x-text="item.name"></h3>
+                <p class="text-[11px] uppercase tracking-wide text-slate-400" x-text="item.category"></p>
+              </div>
+              <span class="badge" :class="'badge-' + item.tone" x-text="item.status_icon + ' ' + item.status_label"></span>
+            </div>
+
+            <p class="mt-2 text-xs leading-relaxed text-slate-600" x-text="item.explain"></p>
+
+            <div class="mt-2 flex flex-wrap gap-1.5" x-show="item.portion">
+              <span class="badge badge-tag" x-text="'Порция: ' + item.portion"></span>
+            </div>
+
+            <template x-if="item.reasons.length">
+              <div class="mt-2 space-y-1.5 inline-panel p-2.5">
+                <template x-for="reason in item.reasons" :key="reason.tag">
+                  <div class="text-[11px] leading-snug">
+                    <span class="badge badge-tag mr-1" :style="'color:' + tagColor(reason.tag)">
+                      <span x-text="reason.tag_icon"></span><span x-text="reason.tag_short"></span>
+                    </span>
+                    <span class="text-slate-600" x-text="reason.reason"></span>
+                  </div>
+                </template>
+              </div>
+            </template>
+
+            <p class="mt-2 text-[11px] leading-snug text-slate-400" x-show="item.note" x-text="item.note"></p>
+
+            <template x-if="item.other_notes.length">
+              <details class="mt-2">
+                <summary class="cursor-pointer text-[11px] text-slate-400"
+                         x-text="'При других тегах (' + item.other_notes.length + ')'"></summary>
+                <div class="mt-1.5 space-y-1">
+                  <template x-for="note in item.other_notes" :key="note.tag">
+                    <div class="text-[11px] leading-snug text-slate-500">
+                      <span class="badge badge-tag mr-1" :style="'color:' + tagColor(note.tag)">
+                        <span x-text="note.tag_short"></span>
+                      </span>
+                      <span x-text="note.status_label + ': ' + note.reason"></span>
+                    </div>
+                  </template>
+                </div>
+              </details>
+            </template>
+          </div>
+        </template>
+      </div>
+
+      <p class="text-sm text-slate-400" x-show="foods && !foods.items.length">
+        Ничего не найдено. Измените запрос или снимите фильтр статуса.
+      </p>
+
+      <!-- Лекарственные позиции -->
+      <div class="card card-pad" x-show="foods && foods.drugs && foods.drugs.length">
+        <div class="card-head">
+          <div class="card-heading">
+            <div class="card-icon card-icon--caution" aria-hidden="true">💊</div>
+            <div>
+              <h2 class="card-title">Обезболивающие в светофоре</h2>
+              <p class="card-sub">Препараты оцениваются по тем же тегам, что и еда: почему они нежелательны при ваших ограничениях.</p>
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 items-start gap-3 md:grid-cols-2">
+          <template x-for="drug in (foods ? foods.drugs : [])" :key="drug.id">
+            <div class="inline-panel p-3.5">
+              <div class="flex items-start justify-between gap-2">
+                <h3 class="text-sm font-semibold" x-text="drug.name"></h3>
+                <span class="badge" :class="'badge-' + drug.tone" x-text="drug.status_label"></span>
+              </div>
+              <div class="mt-2 space-y-1">
+                <template x-for="reason in drug.reasons" :key="reason.tag">
+                  <div class="text-[11px] leading-snug">
+                    <span class="badge badge-tag mr-1" :style="'color:' + tagColor(reason.tag)">
+                      <span x-text="reason.tag_icon"></span><span x-text="reason.tag_short"></span>
+                    </span>
+                    <span class="text-slate-600" x-text="reason.reason"></span>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <p class="text-xs leading-relaxed text-slate-400" x-show="boot" x-text="boot ? boot.disclaimer : ''"></p>
+    </section>
+
+    <!-- ============================================================= -->
+    <!-- ВКЛАДКА «ОТЧЁТ ДЛЯ ВРАЧА»                                     -->
+    <!-- ============================================================= -->
+    <section x-show="tab === 'report'" class="space-y-6">
+      <div class="no-print card card-pad">
+        <div class="card-head">
+          <div class="card-heading">
+            <div class="card-icon" aria-hidden="true">🖨</div>
+            <div>
+              <h2 class="card-title">Отчёт для врача</h2>
+              <p class="card-sub">Сводка за период: симптомы, препараты, головная боль и счётчик НПВС.</p>
+            </div>
+          </div>
+          <button class="btn btn-soft" type="button" @click="printReport()" x-show="report">
+            🖨 Печать / PDF (1 лист A4)
+          </button>
+        </div>
+        <div class="flex flex-wrap items-end gap-3">
+          <div>
+            <label class="label" for="rep-from">Период с</label>
+            <input id="rep-from" type="date" class="field" style="max-width:11rem" x-model="reportFrom">
+          </div>
+          <div>
+            <label class="label" for="rep-to">по</label>
+            <input id="rep-to" type="date" class="field" style="max-width:11rem" x-model="reportTo">
+          </div>
+          <button class="btn btn-primary" type="button" @click="loadReport()" :disabled="busy">Сформировать</button>
+          <button class="btn btn-ghost" type="button" @click="preset(30)">30 дней</button>
+          <button class="btn btn-ghost" type="button" @click="preset(90)">90 дней</button>
+          <button class="btn btn-ghost" type="button" @click="presetMonth()">Этот месяц</button>
+          <a class="btn btn-ghost" href="/api/export" download="diary-export.json">Экспорт JSON</a>
+        </div>
+        <p class="card-sub mt-3">
+          Страница свёрстана под один лист A4 в портретной ориентации. Если записей много, таблица автоматически
+          уплотняется — при необходимости выберите период покороче.
+        </p>
+      </div>
+
+      <template x-if="report">
+        <div class="print-area card card-pad" :class="report.rows.length > 26 ? 'print-tight' : ''">
+
+          <!-- Заголовок отчёта -->
+          <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-4">
+            <div>
+              <h2 class="text-lg font-bold">Дневник самонаблюдения — сводка для врача</h2>
+              <p class="mt-1 text-xs text-slate-500">
+                Профиль: <b x-text="report.profile.name"></b> ·
+                Период: <b x-text="humanDate(report.period.from) + ' — ' + humanDate(report.period.to)"></b>
+                (<span x-text="report.period.days"></span>
+                <span x-text="plural(report.period.days, 'день', 'дня', 'дней')"></span>) ·
+                Сформирован: <span x-text="report.generated_at"></span>
+              </p>
+            </div>
+            <div class="text-right text-[11px] text-slate-400">
+              <div x-text="report.app.name"></div>
+              <div x-text="'версия ' + report.app.version"></div>
+            </div>
+          </div>
+
+          <!-- Профиль и теги -->
+          <div class="metric-grid metric-grid--three mt-3">
+            <div class="metric print-card">
+              <span class="metric__label">Активные ограничения</span>
+              <div class="metric__row">
+                <template x-for="tag in report.tags" :key="tag.id">
+                  <span class="badge badge-tag" :style="'color:' + tagColor(tag.id)">
+                    <span x-text="tag.icon"></span><span x-text="tag.label"></span>
+                  </span>
+                </template>
+                <span class="badge badge-neutral" x-show="!report.tags.length">не выбраны</span>
+              </div>
+            </div>
+
+            <div class="metric print-card">
+              <span class="metric__label">Счётчик НПВС</span>
+              <div class="metric__value">
+                <span x-text="report.nsaid.count"></span>
+                <span class="metric__unit"
+                      x-text="plural(report.nsaid.count, 'приём', 'приёма', 'приёмов')
+                              + ' / ' + report.nsaid.days_with_intake + ' '
+                              + plural(report.nsaid.days_with_intake, 'день', 'дня', 'дней')"></span>
+                <span class="badge" :class="'badge-' + report.nsaid.tone" x-text="report.nsaid.level_label"></span>
+              </div>
+              <span class="metric__hint" x-text="'за ' + report.nsaid.window_days + ' ' + plural(report.nsaid.window_days, 'день', 'дня', 'дней') + '. ' + report.nsaid.message"></span>
+            </div>
+
+            <div class="metric print-card">
+              <span class="metric__label">Вода</span>
+              <div class="metric__value">
+                <span x-text="report.water.avg_glasses"></span>
+                <span class="metric__unit"
+                      x-text="plural(report.water.avg_glasses, 'стакан', 'стакана', 'стаканов') + ' в среднем'"></span>
+              </div>
+              <span class="metric__hint">
+                Цель <span x-text="glassesLabel(report.water.goal)"></span> достигнута в
+                <span x-text="report.water.goal_days"></span> из
+                <span x-text="report.water.logged_days"></span>
+                <span x-text="plural(report.water.logged_days, 'дня', 'дней', 'дней')"></span> с записями.
+                Дневник заполнен в <b x-text="report.logged_days"></b> из
+                <span x-text="report.period.days"></span>
+                <span x-text="plural(report.period.days, 'дня', 'дней', 'дней')"></span>.
+              </span>
+            </div>
+          </div>
+
+          <!-- Памятка -->
+          <div class="print-card mt-3 rounded-xl border border-slate-100 p-3">
+            <span class="label">Медицинская памятка пациента</span>
+            <div class="prose-note" x-text="report.medical_memo || '—'"></div>
+          </div>
+
+          <!-- Регулярные препараты -->
+          <div class="print-card mt-3 rounded-xl border border-slate-100 p-3">
+            <span class="label">Регулярные препараты и приверженность лечению</span>
+            <table class="print-table mt-1 w-full border-collapse text-xs">
+              <thead>
+                <tr class="text-left text-slate-500">
+                  <th class="num-left border-b border-slate-200 py-1 pr-2 font-semibold">Препарат</th>
+                  <th class="num-left border-b border-slate-200 py-1 pr-2 font-semibold">Доза</th>
+                  <th class="num-left border-b border-slate-200 py-1 pr-2 font-semibold">Схема</th>
+                  <th class="num border-b border-slate-200 py-1 font-semibold">Принято дней</th>
+                  <th class="num border-b border-slate-200 py-1 font-semibold">%</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="med in report.medications" :key="med.medication_id">
+                  <tr>
+                    <td class="num-left border-b border-slate-100 py-1 pr-2" x-text="med.name"></td>
+                    <td class="num-left border-b border-slate-100 py-1 pr-2" x-text="med.dose || '—'"></td>
+                    <td class="num-left border-b border-slate-100 py-1 pr-2" x-text="med.schedule || '—'"></td>
+                    <td class="num border-b border-slate-100 py-1"
+                        x-text="med.taken_days + ' из ' + med.days"></td>
+                    <td class="num border-b border-slate-100 py-1" x-text="med.percent + '%'"></td>
+                  </tr>
+                </template>
+                <tr x-show="!report.medications.length">
+                  <td colspan="5" class="py-1 text-slate-400">Нет активных регулярных препаратов.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Симптомы -->
+          <div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <div class="print-card rounded-xl border border-slate-100 p-3">
+              <span class="label">Симптомы за период</span>
+              <table class="print-table mt-1 w-full border-collapse text-xs">
+                <thead>
+                  <tr class="text-left text-slate-500">
+                    <th class="num-left border-b border-slate-200 py-1 pr-2 font-semibold">Симптом</th>
+                    <th class="num border-b border-slate-200 py-1 font-semibold">Средний балл</th>
+                    <th class="num border-b border-slate-200 py-1 font-semibold">Макс.</th>
+                    <th class="num-left border-b border-slate-200 py-1 pl-2 font-semibold">Дней с симптомом</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="stat in report.symptom_stats" :key="stat.key">
+                    <tr>
+                      <td class="num-left border-b border-slate-100 py-1 pr-2" x-text="stat.label"></td>
+                      <td class="num border-b border-slate-100 py-1" x-text="stat.avg"></td>
+                      <td class="num border-b border-slate-100 py-1" x-text="stat.max"></td>
+                      <td class="num-left border-b border-slate-100 py-1 pl-2"
+                          x-text="stat.days_any + ' (' + stat.percent_any + '%), выраженно — ' + stat.days_strong"></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+              <div class="mt-2 flex flex-wrap gap-1.5">
+                <template x-for="stool in report.stool" :key="stool.value">
+                  <span class="badge badge-neutral" x-text="stool.label + ': ' + stool.count + ' дн.'"></span>
+                </template>
+              </div>
+            </div>
+
+            <div class="print-card metric">
+              <span class="metric__label">Головная боль</span>
+              <div class="metric__value">
+                <span x-text="report.headache.episodes"></span>
+                <span class="metric__unit"
+                      x-text="plural(report.headache.episodes, 'эпизод', 'эпизода', 'эпизодов')
+                              + ' за ' + report.headache.days + ' '
+                              + plural(report.headache.days, 'день', 'дня', 'дней')"></span>
+              </div>
+              <span class="metric__hint">
+                Средняя интенсивность <b x-text="report.headache.avg_intensity"></b>/10 ·
+                максимум <b x-text="report.headache.max_intensity"></b>/10 ·
+                средняя длительность <b x-text="report.headache.avg_duration"></b> ч ·
+                с обезболивающим <b x-text="report.headache.with_medication"></b>
+              </span>
+              <div class="metric__row">
+                <template x-for="side in report.headache.sides" :key="side.value">
+                  <span class="badge badge-neutral" x-text="side.label + ': ' + side.count"></span>
+                </template>
+              </div>
+              <div class="divider my-2"></div>
+              <span class="metric__label">Наблюдения</span>
+              <ul class="bullet-list mt-1 space-y-1">
+                <template x-for="note in report.observations" :key="note">
+                  <li class="text-[11px] leading-snug text-slate-600" x-text="note"></li>
+                </template>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Дневная таблица -->
+          <div class="print-card mt-3 rounded-xl border border-slate-100 p-3">
+            <div class="flex items-baseline justify-between gap-2">
+              <span class="label mb-0">Дневник по дням</span>
+              <span class="text-[11px] text-slate-400">шкала 0–3 · ГБ = головная боль</span>
+            </div>
+            <div class="scroll-x mt-1">
+              <table class="print-table w-full border-collapse text-xs">
+                <thead>
+                  <tr class="text-left text-slate-500">
+                    <th class="num-left border-b border-slate-200 py-1 pr-2 font-semibold">Дата</th>
+                    <th class="num border-b border-slate-200 py-1 font-semibold">Вздутие</th>
+                    <th class="num border-b border-slate-200 py-1 font-semibold">Тяжесть</th>
+                    <th class="num border-b border-slate-200 py-1 font-semibold">Изжога</th>
+                    <th class="num border-b border-slate-200 py-1 font-semibold">Кашель</th>
+                    <th class="num border-b border-slate-200 py-1 font-semibold">Боль</th>
+                    <th class="num-left border-b border-slate-200 py-1 pr-2 font-semibold">Стул</th>
+                    <th class="num-left border-b border-slate-200 py-1 pr-2 font-semibold">ГБ</th>
+                    <th class="num-left border-b border-slate-200 py-1 font-semibold">Препараты</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="row in report.rows" :key="row.date">
+                    <tr>
+                      <td class="num-left border-b border-slate-100 py-1 pr-2 whitespace-nowrap" x-text="humanDate(row.date)"></td>
+                      <td class="num border-b border-slate-100 py-1" x-text="row.bloating ?? '—'"></td>
+                      <td class="num border-b border-slate-100 py-1" x-text="row.heaviness ?? '—'"></td>
+                      <td class="num border-b border-slate-100 py-1" x-text="row.heartburn ?? '—'"></td>
+                      <td class="num border-b border-slate-100 py-1" x-text="row.reflux_cough ?? '—'"></td>
+                      <td class="num border-b border-slate-100 py-1" x-text="row.pain ?? '—'"></td>
+                      <td class="num-left border-b border-slate-100 py-1 pr-2" x-text="row.stool"></td>
+                      <td class="num-left border-b border-slate-100 py-1 pr-2" x-text="row.headache"></td>
+                      <td class="num-left border-b border-slate-100 py-1">
+                        <span x-text="row.medications"></span>
+                        <span class="badge badge-trigger ml-1" x-show="row.nsaid_flag">НПВС</span>
+                      </td>
+                    </tr>
+                  </template>
+                  <tr x-show="!report.rows.length">
+                    <td colspan="9" class="py-2 text-slate-400">За выбранный период записей нет.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Дисклеймер: единственный на странице, в самом низу отчёта.
+               Именно он попадает на печатный лист (подвал при печати скрыт). -->
+          <div class="print-card mt-3 rounded-xl border p-3"
+               style="border-color:var(--warn-ring);background:var(--warn-soft)">
+            <p class="text-[11px] font-semibold" style="color:var(--warn)">Важно</p>
+            <p class="mt-1 text-[11px] leading-snug" style="color:var(--warn)" x-text="report.disclaimer"></p>
+          </div>
+        </div>
+      </template>
+
+      <div class="card card-pad" x-show="!report">
+        <p class="text-sm text-slate-500">Выберите период и нажмите «Сформировать», чтобы получить сводку для печати.</p>
+      </div>
+    </section>
+
+    <!-- ============================================================= -->
+    <!-- ВКЛАДКА «НАСТРОЙКИ»                                           -->
+    <!-- ============================================================= -->
+    <section x-show="tab === 'settings'" class="space-y-6">
+      <div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+        <!-- Профиль -->
+        <div class="card card-pad">
+          <div class="card-head">
+            <div class="card-heading">
+              <div class="card-icon" aria-hidden="true">👤</div>
+              <div>
+                <h2 class="card-title">Профиль и памятка</h2>
+                <p class="card-sub">Памятка попадает в отчёт для врача. Пишите так, как удобно вам.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <div>
+              <label class="label" for="set-name">Название профиля</label>
+              <input id="set-name" class="field" x-model="profileForm.name" maxlength="120">
+            </div>
+
+            <div>
+              <label class="label" for="set-memo">Медицинская памятка</label>
+              <textarea id="set-memo" class="field" rows="12" x-model="profileForm.medical_memo"></textarea>
+              <div class="mt-1.5 flex flex-wrap gap-2">
+                <button class="btn btn-ghost btn-sm" type="button" @click="profileForm.medical_memo = boot.default_memo">
+                  Вернуть шаблон
+                </button>
+                <button class="btn btn-ghost btn-sm" type="button" @click="saveProfile()" :disabled="busy">
+                  Сохранить профиль и теги
+                </button>
+                <span class="badge badge-safe" x-show="flash.profile" x-text="flash.profile"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Теги -->
+        <div class="card card-pad">
+          <div class="card-head">
+            <div class="card-heading">
+              <div class="card-icon card-icon--safe" aria-hidden="true">🎛</div>
+              <div>
+                <h2 class="card-title">Модульные ограничения</h2>
+                <p class="card-sub">
+                  Включите только то, что относится к вам. Каталог, меню и отчёт сразу перестроятся под выбранную комбинацию.
+                </p>
+              </div>
+            </div>
+            <span class="badge badge-neutral" x-text="profileForm.active_tags.length + ' из ' + (boot ? boot.tags.length : 5)"></span>
+          </div>
+
+          <div class="tag-grid">
+            <template x-for="tag in (boot ? boot.tags : [])" :key="tag.id">
+              <label class="tag-card"
+                     :class="{ 'is-active': profileForm.active_tags.includes(tag.id) }"
+                     :style="'--tag-color:' + tagColor(tag.id)">
+                <input type="checkbox" :value="tag.id"
+                       :checked="profileForm.active_tags.includes(tag.id)"
+                       @change="toggleTag(tag.id)">
+                <span class="min-w-0 flex-1">
+                  <span class="tag-card__head">
+                    <span class="tag-card__title">
+                      <span x-text="tag.icon"></span> <span x-text="tag.label"></span>
+                    </span>
+                    <span class="badge badge-tag" x-text="'исключает ' + tagImpact(tag.id) + ' поз.'"></span>
+                    <span class="badge badge-safe" x-show="profileForm.active_tags.includes(tag.id)">активен</span>
+                  </span>
+                  <span class="tag-card__desc" x-text="tag.focus"></span>
+                  <span class="tag-card__meta" x-text="'Следим за: ' + tag.checks"></span>
+                </span>
+              </label>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <!-- Препараты -->
+      <div class="card card-pad">
+        <div class="card-head">
+          <div class="card-heading">
+            <div class="card-icon card-icon--caution" aria-hidden="true">💊</div>
+            <div>
+              <h2 class="card-title">Препараты</h2>
+              <p class="card-sub">
+                Регулярные позиции попадают в ежедневный чек-лист. Пометьте НПВС — они считаются в счётчике
+                обезболивающих (например, Налгезин или Аспирин).
+              </p>
+            </div>
+          </div>
+          <button class="btn btn-soft btn-sm" type="button" @click="newMedication()">+ Добавить</button>
+        </div>
+
+        <div class="grid grid-cols-1 items-start gap-3 md:grid-cols-2">
+          <template x-for="med in (boot ? boot.medications : [])" :key="med.id">
+            <div class="inline-panel p-3.5">
+              <div class="flex flex-wrap items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-sm font-semibold" x-text="med.name"></span>
+                    <span class="badge badge-neutral" x-show="!med.active">не в чек-листе</span>
+                    <span class="badge badge-trigger" x-show="med.is_nsaid">НПВС</span>
+                    <span class="badge badge-caution" x-show="!med.is_nsaid && med.is_analgesic">обезболивающее</span>
+                  </div>
+                  <p class="mt-0.5 text-xs text-slate-500"
+                     x-text="[med.dose, med.schedule].filter(Boolean).join(' · ') || 'доза не указана'"></p>
+                  <p class="text-[11px] text-slate-400" x-show="med.purpose" x-text="med.purpose"></p>
+                  <p class="text-[11px]" style="color:var(--tag-cardio)"
+                     x-show="med.cardio_note && isTagActive('cardio_caution')"
+                     x-text="'❤️ ' + med.cardio_note"></p>
+                </div>
+                <div class="flex gap-1.5">
+                  <button class="btn btn-ghost btn-sm" type="button" @click="editMedication(med)">Изменить</button>
+                  <button class="btn btn-danger btn-sm" type="button" @click="deleteMedication(med)">Удалить</button>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <!-- Форма препарата -->
+        <div class="mt-4 inline-panel p-3" style="border-color:var(--accent-soft)" x-show="medDraft">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-sm font-semibold" x-text="medDraft && medDraft.id ? 'Изменить препарат' : 'Новый препарат'"></span>
+            <button class="btn btn-ghost btn-sm" type="button" @click="medDraft = null">Отмена</button>
+          </div>
+          <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div>
+              <label class="label" for="med-name">Название</label>
+              <input id="med-name" class="field" x-model="medDraft.name" placeholder="Аллопуринол">
+            </div>
+            <div>
+              <label class="label" for="med-dose">Доза</label>
+              <input id="med-dose" class="field" x-model="medDraft.dose" placeholder="100 мг">
+            </div>
+            <div>
+              <label class="label" for="med-schedule">Схема приёма</label>
+              <input id="med-schedule" class="field" x-model="medDraft.schedule" placeholder="1 раз в день, утром">
+            </div>
+            <div class="sm:col-span-2">
+              <label class="label" for="med-purpose">Назначение</label>
+              <input id="med-purpose" class="field" x-model="medDraft.purpose" placeholder="Контроль мочевой кислоты">
+            </div>
+            <div>
+              <label class="label" for="med-kind">Тип</label>
+              <select id="med-kind" class="field" x-model="medDraft.kind">
+                <option value="regular">Регулярный</option>
+                <option value="rescue">По требованию</option>
+                <option value="nsaid">НПВС</option>
+              </select>
+            </div>
+            <div class="sm:col-span-3">
+              <label class="label" for="med-cardio">Заметка о кардио-совместимости</label>
+              <input id="med-cardio" class="field" x-model="medDraft.cardio_note"
+                     placeholder="Например: задерживает жидкость, сверить с кардиологом">
+            </div>
+          </div>
+          <div class="mt-3 flex flex-wrap items-center gap-4">
+            <label class="flex items-center gap-2 text-xs text-slate-600">
+              <input type="checkbox" x-model="medDraft.active"><span>Показывать в ежедневном чек-листе</span>
+            </label>
+            <label class="flex items-center gap-2 text-xs text-slate-600">
+              <input type="checkbox" x-model="medDraft.is_nsaid"><span>Это НПВС (считать в счётчике)</span>
+            </label>
+            <button class="btn btn-primary ml-auto" type="button" @click="saveMedication()" :disabled="busy">
+              Сохранить препарат
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Данные и о приложении -->
+      <div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+        <div class="card card-pad">
+          <div class="card-head">
+            <div class="card-heading">
+              <div class="card-icon" aria-hidden="true">🗄</div>
+              <div>
+                <h2 class="card-title">Данные</h2>
+                <p class="card-sub">Всё хранится локально в одном файле SQLite. Файл исключён из git.</p>
+              </div>
+            </div>
+          </div>
+          <div class="space-y-1 text-xs text-slate-600" x-show="boot">
+            <div>Путь к базе: <span class="font-mono" x-text="boot ? boot.db.path : ''"></span></div>
+            <div>Размер: <span x-text="boot ? boot.db.size_kb : 0"></span> КБ</div>
+            <div>
+              Записей в каталоге: <span x-text="boot ? boot.db.foods : 0"></span> продуктов,
+              <span x-text="boot ? boot.db.meal_ideas : 0"></span> блюд
+            </div>
+          </div>
+          <div class="mt-4 flex flex-wrap gap-2">
+            <a class="btn btn-ghost btn-sm" href="/api/export" download="diary-export.json">Скачать JSON-копию</a>
+            <a class="btn btn-ghost btn-sm" href="/api/bootstrap" target="_blank" rel="noreferrer">Открыть API</a>
+          </div>
+        </div>
+
+        <div class="card card-pad">
+          <div class="card-head">
+            <div class="card-heading">
+              <div class="card-icon card-icon--neutral" aria-hidden="true">ℹ️</div>
+              <div>
+                <h2 class="card-title">О приложении</h2>
+                <p class="card-sub" x-text="boot ? boot.app.tagline : ''"></p>
+              </div>
+            </div>
+          </div>
+          <div class="text-xs text-slate-600" x-show="boot">
+            <div>Версия: <span x-text="boot ? boot.app.version : ''"></span></div>
+            <div>Каталог: <span x-text="boot ? boot.food_count : 0"></span> продуктовых позиций</div>
+            <div>Теги: <span x-text="boot ? boot.tags.length : 0"></span></div>
+          </div>
+          <div class="divider my-4"></div>
+          <p class="text-xs leading-relaxed text-slate-500" x-text="boot ? boot.disclaimer : ''"></p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============================ Футер ============================ -->
+  <!-- Минималистичный подвал: только технические детали и версия.
+       Дисклеймер живёт ровно в одном месте — в конце отчёта (и на вкладке
+       «Светофор»), чтобы не дублироваться на экране и попадать в печать. -->
+  <footer class="no-print app-footer">
+    <div class="page-container max-w-6xl mx-auto flex flex-col gap-2 px-4 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+      <p class="text-xs text-slate-500">
+        <span x-text="boot ? boot.app.name : 'Дневник питания и самонаблюдения'"></span>
+        <span class="text-slate-400" x-show="boot" x-text="'· v' + (boot ? boot.app.version : '')"></span>
+      </p>
+      <p class="text-[11px] text-slate-400">
+        Локальное приложение · FastAPI + SQLite · Tailwind + DiaryRuntime · данные не покидают ваш компьютер
+      </p>
+    </div>
+  </footer>
+
+  <!-- ============================ Тост ============================ -->
+  <div class="toast no-print" x-show="toast.show" x-transition.opacity
+       :style="'background:' + (toast.tone === 'danger' ? 'var(--danger-soft)' : (toast.tone === 'caution' ? 'var(--warn-soft)' : 'var(--safe-soft)'))
+               + ';color:' + (toast.tone === 'danger' ? 'var(--danger)' : (toast.tone === 'caution' ? 'var(--warn)' : 'var(--safe)'))"
+       x-text="toast.text"></div>
+</div>
+
+<script>
+/* ===================================================================== *
+ * Компонент приложения (самописный реактивный рантайм, замена Alpine.js).
+ * Вся логика на клиенте: сервер отдаёт JSON, шаблон один и тот же для
+ * FastAPI и для stdlib-сервера.
+ * ===================================================================== */
+function diary() {
+  return {
+    /* ------------------------------- состояние ------------------------------ */
+    boot: null,
+    busy: false,
+    tab: 'today',
+    today: '',          // строка «YYYY-MM-DD» — сегодняшняя дата
+    date: '',           // выбранная дата дневника
+    snapshot: null,     // снимок дня с сервера (/api/today) для выбранной даты
+    tagColors: {},
+    theme: 'warm',
+
+    tabs: [
+      { key: 'today',    label: 'Сегодня',   icon: '📝' },
+      { key: 'menu',     label: 'Меню',      icon: '🍽' },
+      { key: 'foods',    label: 'Светофор',  icon: '🚦' },
+      { key: 'report',   label: 'Отчёт',     icon: '🖨' },
+      { key: 'settings', label: 'Настройки', icon: '⚙️' }
+    ],
+
+    themes: [
+      { id: 'warm',  label: 'Тёплая',  icon: '🌾' },
+      { id: 'light', label: 'Светлая', icon: '☀️' },
+      { id: 'dark',  label: 'Тёмная',  icon: '🌙' }
+    ],
+
+    triggerOptions: ['Недосып', 'Стресс', 'Голод', 'Погода', 'Нагрузка', 'Кофеин', 'Алкоголь', 'Экран', 'Цикл'],
+
+    form: {
+      symptoms: { bloating: 0, heaviness: 0, heartburn: 0, reflux_cough: 0, pain: 0, stool: 'unknown', note: '' },
+      headache: {
+        // Сторона по умолчанию пустая: пользователь должен выбрать её осознанно,
+        // иначе в дневник попадёт пустой эпизод «Нет боли».
+        side: '', log_time: '', intensity: 5, duration_hours: 0, triggers: [],
+        medication_id: '', medication_custom: '', dose: '', relief: null, note: '', log_intake: true
+      }
+    },
+
+    /** Форма приступа скрыта, пока пользователь не нажал «Отметить приступ». */
+    headacheFormOpen: false,
+
+    water: null,
+    nsaid: null,
+    flash: { symptoms: '', profile: '' },
+
+    menu: null,
+    menuDate: '',
+    menuPerSlot: 2,
+
+    foods: null,
+    foodQuery: '',
+    foodStatus: '',
+    foodCategory: 'all',
+
+    report: null,
+    reportFrom: '',
+    reportTo: '',
+
+    profileForm: { name: '', active_tags: [], medical_memo: '' },
+    medDraft: null,
+
+    toast: { show: false, text: '', tone: 'safe' },
+    toastTimer: null,
+
+    /* --------------------------------- утилиты ------------------------------- */
+    todayIso() {
+      const now = new Date();
+      const pad = (value) => String(value).padStart(2, '0');
+      return now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+    },
+
+    /** Приводит любое значение к ISO-строке 'YYYY-MM-DD' (или ''). */
+    isoOf(value) {
+      if (typeof value !== 'string') return '';
+      const candidate = value.slice(0, 10);
+      return /^\d{4}-\d{2}-\d{2}$/.test(candidate) ? candidate : '';
+    },
+
+    humanDate(value) {
+      const iso = this.isoOf(value);
+      if (!iso) return '—';
+      const parts = iso.split('-');
+      return parts[2] + '.' + parts[1] + '.' + parts[0];
+    },
+
+    /** «18 ноября 2026» — формат для шапки и отчёта. */
+    humanDateLong(value) {
+      const iso = this.isoOf(value);
+      if (!iso) return '—';
+      const parts = iso.split('-');
+      const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+                      'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+      const monthIndex = parseInt(parts[1], 10) - 1;
+      const month = months[monthIndex] || parts[1];
+      return parseInt(parts[2], 10) + ' ' + month + ' ' + parts[0];
+    },
+
+    /** Подпись в шапке: сегодня / выбранная дата. */
+    todayLabel() {
+      if (!this.today) return '—';
+      return this.date === this.today ? 'Сегодня, ' + this.humanDateLong(this.today)
+                                      : this.humanDateLong(this.today);
+    },
+
+    /** Короткий счётчик записей за выбранный день (только если смотрим сегодня). */
+    todayRecords() {
+      if (!this.snapshot || this.date !== this.today) return '';
+      const parts = [];
+      if (this.snapshot.symptoms) parts.push('чек-ин');
+      const episodes = this.snapshot.headaches.length;
+      if (episodes) parts.push('ГБ ' + episodes);
+      const tablets = this.snapshot.intakes.length;
+      if (tablets) parts.push('таб. ' + tablets);
+      const taken = this.snapshot.checklist.taken_count;
+      if (taken) parts.push('приёмы ' + taken);
+      return parts.join(', ');
+    },
+
+    todayRecordsTitle() {
+      const records = this.todayRecords();
+      return records ? 'Записи за сегодня: ' + records
+                     : 'Записей за сегодня пока нет';
+    },
+
+    addDays(iso, offset) {
+      const base = new Date((this.isoOf(iso) || this.todayIso()) + 'T12:00:00');
+      if (Number.isNaN(base.getTime())) return this.todayIso();
+      base.setDate(base.getDate() + offset);
+      const pad = (value) => String(value).padStart(2, '0');
+      return base.getFullYear() + '-' + pad(base.getMonth() + 1) + '-' + pad(base.getDate());
+    },
+
+    /* ---------------------------------- тема --------------------------------- */
+    /** Переключает тему и запоминает выбор. */
+    setTheme(themeId) {
+      const known = this.themes.some((option) => option.id === themeId);
+      const next = known ? themeId : 'warm';
+      this.theme = next;
+      document.documentElement.setAttribute('data-theme', next);
+      try { window.localStorage.setItem('diary-theme', next); } catch (error) { /* ignore */ }
+      // Цвета тегов заданы в CSS-переменных, поэтому их нужно перечитать.
+      this.readTagColors();
+    },
+
+    /** Читает цвета тегов из CSS-переменных текущей темы. */
+    readTagColors() {
+      const styles = getComputedStyle(document.documentElement);
+      const colors = {};
+      (this.boot ? this.boot.tags : []).forEach((tag) => {
+        const name = String(tag.color || '').replace(/^var\(|\)$/g, '').trim();
+        const value = name ? styles.getPropertyValue(name).trim() : '';
+        colors[tag.id] = value || '#2E7D6B';
+      });
+      this.tagColors = colors;
+    },
+
+    /** Безопасное число для API: пустая строка и NaN превращаются в значение по умолчанию. */
+    num(value, fallback) {
+      const parsed = typeof value === 'number' ? value : parseFloat(value);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    },
+
+    /** Необязательное целое: '' / null / NaN → null. */
+    optInt(value) {
+      if (value === '' || value === null || value === undefined) return null;
+      const parsed = parseInt(value, 10);
+      return Number.isFinite(parsed) ? parsed : null;
+    },
+
+    /**
+     * Русское склонение числительных.
+     * plural(1, 'стакан', 'стакана', 'стаканов') → 'стакан'
+     * plural(3, ...) → 'стакана', plural(7, ...) → 'стаканов',
+     * plural(5.3, ...) → 'стакана' (после дроби — родительный единственного).
+     */
+    plural(value, one, few, many) {
+      const number = typeof value === 'number' ? value : parseFloat(value);
+      if (!Number.isFinite(number)) return many;
+      if (!Number.isInteger(number)) return few;
+      const count = Math.abs(Math.trunc(number));
+      if (count % 10 === 1 && count % 100 !== 11) return one;
+      if (count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 12 || count % 100 > 14)) return few;
+      return many;
+    },
+
+    /** «1 стакан», «3 стакана», «7 стаканов» — с числом. */
+    glassesLabel(value) {
+      const number = typeof value === 'number' ? value : parseFloat(value);
+      if (!Number.isFinite(number)) return String(value);
+      return number + ' ' + this.plural(number, 'стакан', 'стакана', 'стаканов');
+    },
+
+    async api(path, options) {
+      const config = options || {};
+      const init = { method: config.method || 'GET', headers: {} };
+      if (config.body !== undefined && config.body !== null) {
+        init.headers['Content-Type'] = 'application/json';
+        init.body = JSON.stringify(config.body);
+      }
+      const response = await fetch(path, init);
+      let data = null;
+      try { data = await response.json(); } catch (error) { data = null; }
+      if (!response.ok) {
+        let message = (data && (data.error || data.detail)) || ('Ошибка ' + response.status);
+        if (Array.isArray(message)) message = message.map((item) => item.msg || '').join('; ');
+        throw new Error(typeof message === 'string' ? message : JSON.stringify(message));
+      }
+      return data;
+    },
+
+    notify(text, tone) {
+      this.toast = { show: true, text: text, tone: tone || 'safe' };
+      clearTimeout(this.toastTimer);
+      this.toastTimer = setTimeout(() => { this.toast.show = false; }, 3200);
+    },
+
+    async guard(action) {
+      this.busy = true;
+      try {
+        await action();
+      } catch (error) {
+        this.notify(error.message || String(error), 'danger');
+      } finally {
+        this.busy = false;
+      }
+    },
+
+    /* --------------------------- справочники тегов --------------------------- */
+    isTagActive(tagId) {
+      return !!(this.boot && this.boot.profile.active_tags.includes(tagId));
+    },
+
+    tagById(tagId) {
+      return (this.boot ? this.boot.tags : []).find((tag) => tag.id === tagId) || null;
+    },
+
+    tagShort(tagId) {
+      const tag = this.tagById(tagId);
+      return tag ? tag.short : tagId;
+    },
+
+    tagColor(tagId) {
+      return this.tagColors[tagId] || '#2E7D6B';
+    },
+
+    tagImpact(tagId) {
+      return (this.boot && this.boot.tag_impact && this.boot.tag_impact[tagId]) || 0;
+    },
+
+    activeTags() {
+      if (!this.boot) return [];
+      return this.boot.tags.filter((tag) => this.boot.profile.active_tags.includes(tag.id));
+    },
+
+    sideLabel(value) {
+      const option = (this.boot ? this.boot.headache_sides : []).find((item) => item.value === value);
+      return option ? option.label : value;
+    },
+
+    scoreBadge() {
+      const score = this.snapshot ? this.snapshot.symptom_score : 0;
+      if (!score) return { cls: 'badge-safe', text: 'Симптомов не отмечено' };
+      if (score <= 3) return { cls: 'badge-safe', text: 'Суммарный балл: ' + score };
+      if (score <= 7) return { cls: 'badge-caution', text: 'Суммарный балл: ' + score };
+      return { cls: 'badge-trigger', text: 'Суммарный балл: ' + score };
+    },
+
+    /** Счётчик записей у вкладки «Сегодня» для выбранной даты. */
+    dayBadge() {
+      if (!this.snapshot) return '';
+      const parts = [];
+      if (this.snapshot.symptoms) parts.push('чек-ин');
+      if (this.snapshot.headaches.length) parts.push('ГБ ' + this.snapshot.headaches.length);
+      if (this.snapshot.intakes.length) parts.push('таб. ' + this.snapshot.intakes.length);
+      return parts.join(' · ');
+    },
+
+    /** ----------------------------------------------------------------- *
+     * «Итоги за сегодня» — компактное резюме дня.
+     * ----------------------------------------------------------------- */
+    /** Есть ли хоть одна запись симптомов за сегодня. */
+    hasSymptoms() {
+      return !!(this.snapshot && this.snapshot.symptoms);
+    },
+
+    /** Список симптомов с ненулевыми значениями (label: score). */
+    activeSymptomChips() {
+      if (!this.snapshot || !this.snapshot.symptoms) return [];
+      const s = this.snapshot.symptoms;
+      const labels = { bloating: 'Вздутие', heaviness: 'Тяжесть', heartburn: 'Изжога',
+                       reflux_cough: 'Кашель', pain: 'Боль' };
+      const result = [];
+      for (const [key, label] of Object.entries(labels)) {
+        const val = parseInt(s[key], 10);
+        if (val > 0) result.push({ label, value: val });
+      }
+      return result;
+    },
+
+    /** Метка выбранного характера стула (русская). */
+    stoolLabel() {
+      if (!this.snapshot || !this.snapshot.symptoms || !this.snapshot.symptoms.stool) return '';
+      const val = this.snapshot.symptoms.stool;
+      const labels = {};
+      (this.boot ? this.boot.stool_options : []).forEach(o => { labels[o.value] = o.label; });
+      return labels[val] || val;
+    },
+
+    /** Список принятых препаратов за сегодня. */
+    todayMeds() {
+      if (!this.snapshot) return [];
+      const taken = (this.snapshot.checklist && this.snapshot.checklist.items || [])
+        .filter(item => item.taken);
+      // Добавляем препараты по требованию
+      const intakes = (this.snapshot.intakes || []).map(i => i.name);
+      const names = taken.map(t => t.name).concat(intakes);
+      return [...new Set(names)];
+    },
+
+    /* ------------------------------- загрузка ------------------------------- */
+    async init() {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get('tab');
+      if (tab && this.tabs.some((item) => item.key === tab)) this.tab = tab;
+
+      // Тема уже применена ранним скриптом в <head>; подхватываем её в состояние.
+      const applied = document.documentElement.getAttribute('data-theme');
+      this.theme = this.themes.some((option) => option.id === applied) ? applied : 'warm';
+
+      await this.guard(async () => {
+        this.boot = await this.api('/api/bootstrap');
+        this.readTagColors();
+
+        this.today = this.boot.today;
+        this.date = this.boot.today;
+        this.menuDate = this.boot.today;
+        this.reportTo = this.boot.today;
+        this.reportFrom = this.addDays(this.boot.today, -29);
+        this.profileForm = {
+          name: this.boot.profile.name,
+          active_tags: this.boot.profile.active_tags.slice(),
+          medical_memo: this.boot.profile.medical_memo
+        };
+        await this.loadToday();
+        if (this.tab === 'menu') await this.loadMenu();
+        if (this.tab === 'foods') await this.loadFoods();
+        if (this.tab === 'report') await this.loadReport();
+      });
+    },
+
+    async switchTab(key) {
+      this.tab = key;
+      window.history.replaceState(null, '', key === 'today' ? '/' : '/?tab=' + key);
+      await this.guard(async () => {
+        if (key === 'today') await this.loadToday();
+        if (key === 'menu' && !this.menu) await this.loadMenu();
+        if (key === 'foods' && !this.foods) await this.loadFoods();
+        if (key === 'report' && !this.report) await this.loadReport();
+      });
+    },
+
+    shiftDate(offset) {
+      this.date = this.addDays(this.date, offset);
+      this.loadToday();
+    },
+
+    /* --------------------------------- день --------------------------------- */
+    async loadToday() {
+      await this.guard(async () => {
+        const data = await this.api('/api/today?date=' + encodeURIComponent(this.date));
+        // ВАЖНО: снимок дня — отдельное поле. Раньше он писался в this.today
+        // и затирал строку даты, из-за чего в шапке появлялось «[object Object]».
+        this.snapshot = data;
+        // Смена даты закрывает открытую форму приступа, чтобы её нельзя было
+        // случайно сохранить не на тот день.
+        this.headacheFormOpen = false;
+        const log = data.symptoms;
+        this.form.symptoms = {
+          bloating: log ? log.bloating : 0,
+          heaviness: log ? log.heaviness : 0,
+          heartburn: log ? log.heartburn : 0,
+          reflux_cough: log ? log.reflux_cough : 0,
+          pain: log ? log.pain : 0,
+          stool: log ? log.stool : 'unknown',
+          note: log ? log.note : ''
+        };
+        this.water = data.water;
+        this.nsaid = data.nsaid;
+      });
+    },
+
+    async saveSymptoms() {
+      await this.guard(async () => {
+        await this.api('/api/symptoms', {
+          method: 'PUT',
+          body: Object.assign({ log_date: this.date }, this.form.symptoms)
+        });
+        const now = new Date().toLocaleTimeString('ru-RU').slice(0, 5);
+        this.flash.symptoms = 'Сохранено ' + now;
+        // Показываем заметный тост в правом нижнем углу на 3 секунды
+        this.notify('Чек-ин за ' + this.humanDateLong(this.date) + ' сохранён', 'safe');
+        await this.loadToday();
+        setTimeout(() => { this.flash.symptoms = ''; }, 4000);
+      });
+    },
+
+    async clearSymptoms() {
+      await this.guard(async () => {
+        await this.api('/api/symptoms?date=' + encodeURIComponent(this.date), { method: 'DELETE' });
+        this.notify('Запись за день удалена', 'caution');
+        await this.loadToday();
+      });
+    },
+
+    /** Признак того, что в форме выбрано лекарство (влияет на счётчик НПВС). */
+    hasHeadacheMedication() {
+      return !!(this.form.headache.medication_id || (this.form.headache.medication_custom || '').trim());
+    },
+
+    onMedicationPick() {
+      const med = (this.boot ? this.boot.medications : [])
+        .find((item) => String(item.id) === String(this.form.headache.medication_id));
+      if (med) {
+        this.form.headache.dose = med.dose || '';
+        this.form.headache.log_intake = true;
+      }
+    },
+
+    toggleTrigger(trigger) {
+      const list = this.form.headache.triggers;
+      const index = list.indexOf(trigger);
+      if (index === -1) list.push(trigger); else list.splice(index, 1);
+    },
+
+    /* --------------------- головная боль: раскрытие и защита ------------------ */
+    /** Стороны без варианта «Нет боли»: форма открывается только под приступ. */
+    headacheSideOptions() {
+      return (this.boot ? this.boot.headache_sides : [])
+        .filter((option) => option.value !== 'none');
+    },
+
+    resetHeadacheForm() {
+      this.form.headache = {
+        side: '', log_time: '', intensity: 5, duration_hours: 0, triggers: [],
+        medication_id: '', medication_custom: '', dose: '', relief: null, note: '', log_intake: true
+      };
+    },
+
+    openHeadacheForm() {
+      this.resetHeadacheForm();
+      this.headacheFormOpen = true;
+    },
+
+    closeHeadacheForm() {
+      this.headacheFormOpen = false;
+    },
+
+    /** Можно ли сохранять эпизод: нужна сторона и интенсивность от 1 до 10. */
+    canSaveHeadache() {
+      const side = this.form.headache.side;
+      return !!side && side !== 'none' && this.num(this.form.headache.intensity, 0) >= 1;
+    },
+
+    /** Почему кнопка сохранения заблокирована (пусто, если всё в порядке). */
+    headacheBlockReason() {
+      const side = this.form.headache.side;
+      if (!side || side === 'none') {
+        return 'Выберите сторону боли — запись «Нет боли» в дневник не сохраняется.';
+      }
+      if (this.num(this.form.headache.intensity, 0) < 1) {
+        return 'Укажите интенсивность от 1 до 10.';
+      }
+      return '';
+    },
+
+    headacheCountLabel() {
+      const count = this.snapshot ? this.snapshot.headaches.length : 0;
+      if (!count) return 'не болела';
+      return count + ' ' + this.plural(count, 'эпизод', 'эпизода', 'эпизодов');
+    },
+
+    headacheStatusText() {
+      const count = this.snapshot ? this.snapshot.headaches.length : 0;
+      if (count) return 'Записано: ' + this.headacheCountLabel();
+      return this.date === this.today
+        ? 'Сегодня голова не болела'
+        : 'В этот день приступов не отмечено';
+    },
+
+    async addHeadache() {
+      // Двойная защита: кнопка disabled, плюс проверка перед отправкой.
+      // Пустой эпизод («Нет боли, 0/10») не должен попадать в статистику.
+      const reason = this.headacheBlockReason();
+      if (reason) {
+        this.notify(reason, 'caution');
+        return;
+      }
+      await this.guard(async () => {
+        const headache = this.form.headache;
+        const med = (this.boot ? this.boot.medications : [])
+          .find((item) => String(item.id) === String(headache.medication_id));
+        await this.api('/api/headaches', {
+          method: 'POST',
+          body: {
+            log_date: this.date,
+            log_time: headache.log_time,
+            side: headache.side,
+            intensity: this.num(headache.intensity, 5),
+            duration_hours: this.num(headache.duration_hours, 0),
+            triggers: headache.triggers,
+            medication: med ? med.name : (headache.medication_custom || '').trim(),
+            medication_id: med ? med.id : null,
+            dose: headache.dose || (med ? med.dose : ''),
+            relief: this.optInt(headache.relief),
+            note: headache.note,
+            log_intake: !!headache.log_intake && this.hasHeadacheMedication()
+          }
+        });
+        this.resetHeadacheForm();
+        this.headacheFormOpen = false;
+        this.notify('Эпизод записан', 'safe');
+        await this.loadToday();
+      });
+    },
+
+    async deleteHeadache(id) {
+      await this.guard(async () => {
+        await this.api('/api/headaches/' + id, { method: 'DELETE' });
+        await this.loadToday();
+      });
+    },
+
+    async toggleChecklist(item) {
+      await this.guard(async () => {
+        const data = await this.api('/api/checklist', {
+          method: 'POST',
+          body: { medication_id: item.id, check_date: this.date, taken: !item.taken }
+        });
+        if (this.snapshot) this.snapshot.checklist = data;
+      });
+    },
+
+    async changeWater(delta) {
+      await this.guard(async () => {
+        const glasses = Math.max(0, (this.water ? this.water.glasses : 0) + delta);
+        this.water = await this.api('/api/water', {
+          method: 'POST',
+          body: { log_date: this.date, glasses: glasses }
+        });
+        if (this.snapshot) this.snapshot.water = this.water;
+      });
+    },
+
+    /* --------------------------------- меню -------------------------------- */
+    async loadMenu() {
+      await this.guard(async () => {
+        const perSlot = Math.min(4, Math.max(1, this.num(this.menuPerSlot, 2)));
+        this.menuPerSlot = perSlot;
+        this.menu = await this.api('/api/menu?date=' + encodeURIComponent(this.menuDate)
+          + '&per_slot=' + perSlot);
+      });
+    },
+
+    /* ------------------------------ светофор ------------------------------- */
+    async loadFoods() {
+      await this.guard(async () => {
+        const params = new URLSearchParams();
+        if (this.foodQuery) params.set('q', this.foodQuery);
+        if (this.foodStatus) params.set('status', this.foodStatus);
+        if (this.foodCategory && this.foodCategory !== 'all') params.set('category', this.foodCategory);
+        this.foods = await this.api('/api/foods?' + params.toString());
+      });
+    },
+
+    /* -------------------------------- отчёт -------------------------------- */
+    preset(days) {
+      this.reportTo = this.today;
+      this.reportFrom = this.addDays(this.today, -(days - 1));
+      this.loadReport();
+    },
+
+    presetMonth() {
+      const parts = this.today.split('-');
+      this.reportTo = this.today;
+      this.reportFrom = parts[0] + '-' + parts[1] + '-01';
+      this.loadReport();
+    },
+
+    async loadReport() {
+      await this.guard(async () => {
+        this.report = await this.api('/api/report?date_from=' + encodeURIComponent(this.reportFrom)
+          + '&date_to=' + encodeURIComponent(this.reportTo));
+      });
+    },
+
+    printReport() {
+      this.tab = 'report';
+      setTimeout(() => window.print(), 180);
+    },
+
+    /* ------------------------------ настройки ------------------------------ */
+    toggleTag(tagId) {
+      const list = this.profileForm.active_tags;
+      const index = list.indexOf(tagId);
+      if (index === -1) list.push(tagId); else list.splice(index, 1);
+      // Сохраняем порядок каталога, чтобы интерфейс не «прыгал».
+      this.profileForm.active_tags = (this.boot ? this.boot.tags : [])
+        .map((tag) => tag.id)
+        .filter((id) => list.includes(id));
+    },
+
+    async saveProfile() {
+      await this.guard(async () => {
+        this.boot.profile = await this.api('/api/profile', {
+          method: 'PUT',
+          body: {
+            name: this.profileForm.name,
+            active_tags: this.profileForm.active_tags,
+            medical_memo: this.profileForm.medical_memo
+          }
+        });
+        this.profileForm.active_tags = this.boot.profile.active_tags.slice();
+        // Теги управляют всей оценкой — пересобираем то, что уже открыто.
+        this.foods = null;
+        this.menu = null;
+        this.report = null;
+        await this.loadToday();
+        if (this.tab === 'foods') await this.loadFoods();
+        if (this.tab === 'menu') await this.loadMenu();
+        this.flash.profile = 'Сохранено';
+        this.notify('Профиль обновлён, оценки пересчитаны', 'safe');
+        setTimeout(() => { this.flash.profile = ''; }, 4000);
+      });
+    },
+
+    newMedication() {
+      this.medDraft = {
+        id: null, name: '', dose: '', schedule: '', times: [], kind: 'regular',
+        is_nsaid: false, is_analgesic: false, cardio_note: '', purpose: '',
+        active: true, sort_order: 100
+      };
+    },
+
+    editMedication(med) {
+      this.medDraft = JSON.parse(JSON.stringify(med));
+    },
+
+    async saveMedication() {
+      if (!this.medDraft || !(this.medDraft.name || '').trim()) {
+        this.notify('Укажите название препарата', 'caution');
+        return;
+      }
+      await this.guard(async () => {
+        const payload = {
+          name: this.medDraft.name,
+          dose: this.medDraft.dose,
+          schedule: this.medDraft.schedule,
+          times: this.medDraft.times || [],
+          kind: this.medDraft.kind,
+          is_nsaid: !!this.medDraft.is_nsaid,
+          is_analgesic: !!this.medDraft.is_analgesic,
+          cardio_note: this.medDraft.cardio_note,
+          purpose: this.medDraft.purpose,
+          active: !!this.medDraft.active,
+          sort_order: this.medDraft.sort_order || 100
+        };
+        if (this.medDraft.id) {
+          await this.api('/api/medications/' + this.medDraft.id, { method: 'PUT', body: payload });
+        } else {
+          await this.api('/api/medications', { method: 'POST', body: payload });
+        }
+        this.medDraft = null;
+        this.boot = await this.api('/api/bootstrap');
+        await this.loadToday();
+        this.notify('Список препаратов обновлён', 'safe');
+      });
+    },
+
+    async deleteMedication(med) {
+      if (!window.confirm('Удалить «' + med.name + '» из списка препаратов?')) return;
+      await this.guard(async () => {
+        await this.api('/api/medications/' + med.id, { method: 'DELETE' });
+        this.boot = await this.api('/api/bootstrap');
+        await this.loadToday();
+      });
+    }
+  };
+}
+
+/* Проверка доступности локального рантайма (DiaryRuntime) вместо внешнего
+   Alpine.js. Если рантайм не загрузился — показываем предупреждение. */
+window.addEventListener('load', function () {
+  setTimeout(function () {
+    if (window.DiaryRuntime) return;
+    var warning = document.getElementById('boot-warning');
+    if (warning) warning.hidden = false;
+  }, 2500);
+});
+</script>
+</body>
+</html>
